@@ -79,6 +79,13 @@ class Shell:
             self.package_manager = PackageManager(filesystem)
         except:
             pass
+        # Network manager
+        self.network_manager = None
+        try:
+            from core.network import NetworkManager
+            self.network_manager = NetworkManager()
+        except:
+            pass
         self._register_commands()
     
     def _register_commands(self) -> None:
