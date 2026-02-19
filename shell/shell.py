@@ -1338,3 +1338,122 @@ class IdCommand(ShellCommand):
             print(f"groups={','.join(group_ids)}")
 
         return 0
+
+
+class BashCommand(ShellCommand):
+    """Execute shell scripts."""
+
+    def __init__(self):
+        super().__init__("bash", "Execute shell script")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: bash <script> [args...]")
+            return 1
+
+        script_file = args[0]
+        script_args = args[1:]
+
+        try:
+            from shell.scripting import execute_script_file
+            return execute_script_file(script_file, shell, shell.fs, shell.kernel, script_args)
+        except ImportError as e:
+            print(f"bash: scripting engine not available: {e}")
+            return 1
+        except Exception as e:
+            print(f"bash: error executing script: {e}")
+            return 1
+
+
+class SourceCommand(ShellCommand):
+    """Source a script (execute in current shell)."""
+
+    def __init__(self):
+        super().__init__("source", "Execute script in current shell")
+        self.aliases = ["."]
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: source <script>")
+            return 1
+
+        script_file = args[0]
+
+        try:
+            from shell.scripting import execute_script_file
+            return execute_script_file(script_file, shell, shell.fs, shell.kernel, args[1:])
+        except Exception as e:
+            print(f"source: {e}")
+            return 1
+
+
+class TestCommand(ShellCommand):
+    """Evaluate conditional expressions."""
+
+    def __init__(self):
+        super().__init__("test", "Evaluate conditional expression")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            return 1  # False
+
+        # Remove trailing ] if present (for [ command)
+        if args[-1] == ']':
+            args = args[:-1]
+
+        # File tests
+        if args[0].startswith('-') and len(args) >= 2:
+            test = args[0]
+            filename = args[1]
+
+            if test == '-f':
+                return 0 if shell.fs.is_file(filename) else 1
+            elif test == '-d':
+                return 0 if shell.fs.is_directory(filename) else 1
+            elif test == '-e':
+                return 0 if shell.fs.exists(filename) else 1
+            elif test == '-s':
+                inode = shell.fs.get_inode(filename)
+                return 0 if (inode and inode.size > 0) else 1
+
+        # String tests
+        if len(args) == 3:
+            left = args[0]
+            op = args[1]
+            right = args[2]
+
+            if op == '=':
+                return 0 if left == right else 1
+            elif op == '!=':
+                return 0 if left != right else 1
+
+        # Numeric tests
+        if len(args) == 3:
+            try:
+                left = int(args[0])
+                op = args[1]
+                right = int(args[2])
+
+                if op == '-eq':
+                    return 0 if left == right else 1
+                elif op == '-ne':
+                    return 0 if left != right else 1
+                elif op == '-lt':
+                    return 0 if left < right else 1
+                elif op == '-le':
+                    return 0 if left <= right else 1
+                elif op == '-gt':
+                    return 0 if left > right else 1
+                elif op == '-ge':
+                    return 0 if left >= right else 1
+            except ValueError:
+                pass
+
+        # String unary tests
+        if args[0] == '-z' and len(args) >= 2:
+            return 0 if len(args[1]) == 0 else 1
+
+        if args[0] == '-n' and len(args) >= 2:
+            return 0 if len(args[1]) > 0 else 1
+
+        return 1  # False
