@@ -122,7 +122,7 @@ class Shell:
     def execute(self, line: str, save_to_history: bool = True) -> int:
         """Execute a command line."""
         stripped = line.strip()
-        
+
         # Handle history commands
         if stripped == "!!":
             # Repeat last command
@@ -132,7 +132,7 @@ class Shell:
             line = self.history[-1]
             print(f"{line}")
             return self.execute(line, save_to_history=False)
-        
+
         if stripped.startswith("!") and stripped[1:].isdigit():
             # Execute command by history number
             n = int(stripped[1:])
@@ -142,27 +142,80 @@ class Shell:
             line = self.history[n - 1]
             print(f"{line}")
             return self.execute(line, save_to_history=False)
-        
+
         # Save to history (except for history commands themselves)
         if save_to_history and stripped and not stripped.startswith("!"):
             self.history.append(stripped)
             self.history_position = len(self.history)
-        
+
+        # Parse redirection
+        output_file = None
+        append_mode = False
+
+        # Check for output redirection
+        if ' >> ' in line:
+            parts = line.split(' >> ', 1)
+            line = parts[0].strip()
+            output_file = parts[1].strip()
+            append_mode = True
+        elif ' > ' in line:
+            parts = line.split(' > ', 1)
+            line = parts[0].strip()
+            output_file = parts[1].strip()
+            append_mode = False
+
         command_name, args = self.parse_input(line)
-        
+
         if not command_name:
             return 0
-        
-        if command_name in self.commands:
-            try:
-                self.last_exit_code = self.commands[command_name].execute(args, self)
-            except Exception as e:
-                print(f"Error: {e}")
-                self.last_exit_code = 1
-        else:
-            print(f"{command_name}: command not found")
-            self.last_exit_code = 127
-        
+
+        # Capture output if redirecting
+        old_stdout = sys.stdout
+        output_buffer = None
+
+        if output_file and command_name in self.commands:
+            output_buffer = StringIO()
+            sys.stdout = output_buffer
+
+        try:
+            if command_name in self.commands:
+                try:
+                    self.last_exit_code = self.commands[command_name].execute(args, self)
+                except Exception as e:
+                    if output_buffer:
+                        sys.stdout = old_stdout
+                    print(f"Error: {e}")
+                    self.last_exit_code = 1
+            else:
+                if output_buffer:
+                    sys.stdout = old_stdout
+                print(f"{command_name}: command not found")
+                self.last_exit_code = 127
+
+            # Handle output redirection
+            if output_file and output_buffer:
+                sys.stdout = old_stdout
+                output_content = output_buffer.getvalue()
+
+                # Get existing content if appending
+                existing_content = b""
+                if append_mode and self.fs.exists(output_file):
+                    existing = self.fs.read_file(output_file)
+                    if existing:
+                        existing_content = existing
+
+                # Write to file
+                new_content = existing_content + output_content.encode('utf-8')
+                if not self.fs.write_file(output_file, new_content):
+                    print(f"Cannot write to '{output_file}'")
+                    self.last_exit_code = 1
+
+        finally:
+            # Always restore stdout
+            sys.stdout = old_stdout
+            if output_buffer:
+                output_buffer.close()
+
         return self.last_exit_code
     
     def run(self) -> None:
