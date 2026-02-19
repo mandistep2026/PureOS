@@ -35,54 +35,89 @@ if __name__ == "__main__":
 
 from core.kernel import Kernel
 from core.filesystem import FileSystem
+from core.persistence import PersistenceManager
 from shell.shell import Shell
 
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "PureOS Team"
 
 
 class PureOS:
     """Main PureOS operating system class."""
-    
+
     def __init__(self):
         self.kernel = None
         self.filesystem = None
         self.shell = None
         self.running = False
-    
+        self.persistence = PersistenceManager()
+        self.auto_save = True
+        self.state_loaded = False
+
     def initialize(self) -> bool:
         """Initialize the operating system."""
         print("Initializing PureOS...")
-        
+
         try:
             # Initialize kernel
-            print("  [1/3] Starting kernel...")
+            print("  [1/4] Starting kernel...")
             self.kernel = Kernel()
             self.kernel.start()
-            
+
             # Initialize filesystem
-            print("  [2/3] Mounting filesystem...")
+            print("  [2/4] Mounting filesystem...")
             self.filesystem = FileSystem()
-            
+
             # Initialize shell
-            print("  [3/3] Loading shell...")
+            print("  [3/4] Loading shell...")
             self.shell = Shell(self.kernel, self.filesystem)
-            
+
+            # Try to load saved state
+            print("  [4/4] Checking for saved state...")
+            if self.persistence.state_exists():
+                info = self.persistence.get_state_info()
+                if info:
+                    print(f"\n  Found saved state:")
+                    print(f"    Files: {info['files']}")
+                    print(f"    Directories: {info['directories']}")
+                    print(f"    History: {info['history_count']} commands")
+                    print(f"    Working directory: {info['current_directory']}")
+                    print(f"\n  Load saved state? (y/n): ", end='', flush=True)
+
+                    try:
+                        response = input().lower().strip()
+                        if response == 'y':
+                            if self.persistence.load_state(self.filesystem, self.shell, self.kernel):
+                                print("  State loaded successfully!")
+                                self.state_loaded = True
+                            else:
+                                print("  Failed to load state, starting fresh.")
+                    except (EOFError, KeyboardInterrupt):
+                        print("\n  Skipping state load.")
+
             print("\nPureOS initialized successfully!")
             return True
-            
+
         except Exception as e:
             print(f"\nError initializing PureOS: {e}")
             return False
-    
+
     def shutdown(self) -> None:
         """Shutdown the operating system."""
         print("\nShutting down PureOS...")
-        
+
+        # Auto-save state if enabled
+        if self.auto_save and self.filesystem and self.shell:
+            print("  Saving system state...")
+            if self.persistence.save_state(self.filesystem, self.shell, self.kernel):
+                print("  State saved to ~/.pureos/state.json")
+            else:
+                print("  Warning: Failed to save state")
+
         if self.kernel:
             self.kernel.stop()
-        
+
         print("System halted.")
     
     def run(self) -> int:
