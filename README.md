@@ -288,6 +288,52 @@ PureOS is designed to be simple and educational. Contributions should maintain:
 - **Functions**: Define and call shell functions
 - **Test command**: `[ expression ]` for conditions
 
+## What's New in v1.3
+
+### Tab Completion
+- **Command completion**: Type `ec<TAB>` to complete to `echo`
+- **Filename completion**: Type `/ho<TAB>` to complete to `/home/`
+- **Username completion**: Type `su ro<TAB>` to complete to `su root`
+- **Variable completion**: Type `echo $HO<TAB>` to complete to `echo $HOME`
+- **Multiple matches**: Double-tap Tab to see all matching options
+
+### Advanced Line Editing
+- **Cursor movement**: `Ctrl+A` (beginning), `Ctrl+E` (end), arrow keys
+- **Line editing**: `Ctrl+K` (kill to end), `Ctrl+U` (kill to start), `Ctrl+W` (delete word)
+- **Kill and yank**: `Ctrl+K` to cut, `Ctrl+Y` to paste
+- **History search**: `Ctrl+R` to search command history
+- **Clear screen**: `Ctrl+L` clears the screen
+
+### Aliases
+- **Built-in aliases**: `ll` = `ls -la`, `la` = `ls -a`, `l` = `ls -CF`
+- **Custom aliases**: `alias name='command'`
+- **List aliases**: `alias` shows all defined aliases
+- **Remove aliases**: `unalias name` or `unalias -a` (remove all)
+
+### Prompt Customization
+- **PS1 variable**: Customize primary prompt
+  - `\u` - Username
+  - `\h` - Hostname
+  - `\w` - Current working directory
+  - `\W` - Basename of current directory
+  - `\$` - `#` for root, `$` for others
+  - `\t` - Current time (24-hour)
+- **PS2 variable**: Customize continuation prompt (for multi-line input)
+- **Example**: `export PS1="[\t] \u@\h:\W\$ "`
+
+### Wildcards (Globbing)
+- **Asterisk (`*`)**: Match any characters - `rm *.txt`
+- **Question mark (`?`)**: Match single character - `ls file?.txt`
+- **Character class (`[abc]`)**: Match any character in brackets
+- **Examples**:
+  - `ls *.sh` - List all .sh files
+  - `rm *.tmp` - Remove all .tmp files
+  - `cat file?.txt` - Match file1.txt, file2.txt, etc.
+
+### Multi-line Input
+- **Line continuation**: End line with `\` to continue on next line
+- **PS2 prompt**: Shows continuation prompt (default: `>`)
+
 ## Future Enhancements
 
 - [x] Persistent storage (JSON or pickle) ✓ **Implemented in v1.1**
