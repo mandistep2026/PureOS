@@ -72,6 +72,13 @@ class Shell:
             self.line_editor = LineEditor(self)
         except:
             pass
+        # Package manager
+        self.package_manager = None
+        try:
+            from core.package import PackageManager
+            self.package_manager = PackageManager(filesystem)
+        except:
+            pass
         self._register_commands()
     
     def _register_commands(self) -> None:
