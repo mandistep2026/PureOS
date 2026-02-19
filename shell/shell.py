@@ -344,21 +344,8 @@ class Shell:
             self.history.append(stripped)
             self.history_position = len(self.history)
 
-        # Parse redirection
-        output_file = None
-        append_mode = False
-
-        # Check for output redirection
-        if ' >> ' in line:
-            parts = line.split(' >> ', 1)
-            line = parts[0].strip()
-            output_file = parts[1].strip()
-            append_mode = True
-        elif ' > ' in line:
-            parts = line.split(' > ', 1)
-            line = parts[0].strip()
-            output_file = parts[1].strip()
-            append_mode = False
+        # Parse output redirection
+        line, output_file, append_mode = self._parse_output_redirection(line)
 
         command_name, args = self.parse_input(line)
 
@@ -417,6 +404,38 @@ class Shell:
                 output_buffer.close()
 
         return self.last_exit_code
+
+    def _parse_output_redirection(self, line: str) -> Tuple[str, Optional[str], bool]:
+        """Parse output redirection in a command line.
+
+        Supports both spaced and unspaced forms:
+        - echo hello > file.txt
+        - echo hello>>file.txt
+        """
+        try:
+            lexer = shlex.shlex(line, posix=True, punctuation_chars='>')
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            tokens = line.split()
+
+        for i, token in enumerate(tokens):
+            if token in (">", ">>"):
+                if i + 1 >= len(tokens):
+                    return "", None, False
+                command = " ".join(tokens[:i]).strip()
+                output_file = tokens[i + 1]
+                return command, output_file, token == ">>"
+
+            if token.startswith(">>") and len(token) > 2:
+                command = " ".join(tokens[:i]).strip()
+                return command, token[2:], True
+
+            if token.startswith(">") and len(token) > 1:
+                command = " ".join(tokens[:i]).strip()
+                return command, token[1:], False
+
+        return line, None, False
     
     def _execute_background(self, command_name: str, args: List[str], 
                            command_line: str) -> int:

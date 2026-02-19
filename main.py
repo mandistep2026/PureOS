@@ -481,6 +481,24 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 14: Redirection parsing variants
+        print("Test 14: Redirection parsing variants...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo alpha>/tmp/redir.txt") == 0
+            assert fs.read_file("/tmp/redir.txt") == b"alpha\n"
+            assert shell.execute("echo beta>>/tmp/redir.txt") == 0
+            assert fs.read_file("/tmp/redir.txt") == b"alpha\nbeta\n"
+            assert shell.execute("echo gamma > /tmp/redir2.txt") == 0
+            assert fs.read_file("/tmp/redir2.txt") == b"gamma\n"
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
