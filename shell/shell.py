@@ -139,6 +139,13 @@ class Shell:
         self.register_command(RebootCommand())
         self.register_command(ShutdownCommand())
         self.register_command(ExitCommand())
+        
+        # Package manager
+        try:
+            from shell.pkgcommand import PkgCommand
+            self.register_command(PkgCommand())
+        except:
+            pass
     
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
