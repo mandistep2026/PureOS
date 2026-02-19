@@ -268,6 +268,42 @@ class PackageDatabase:
             dependencies=[],
             category="database"
         ),
+        Package(
+            name="iperf3",
+            version="3.14",
+            description="Network bandwidth measurement tool",
+            size=1024,
+            installed_size=2048,
+            dependencies=[],
+            category="network"
+        ),
+        Package(
+            name="netcat",
+            version="1.10",
+            description="Network utility for reading/writing network connections",
+            size=256,
+            installed_size=512,
+            dependencies=[],
+            category="network"
+        ),
+        Package(
+            name="tcpdump",
+            version="4.99",
+            description="Packet analyzer",
+            size=2048,
+            installed_size=4096,
+            dependencies=[],
+            category="network"
+        ),
+        Package(
+            name="mtr",
+            version="0.95",
+            description="Network diagnostic tool (traceroute + ping)",
+            size=512,
+            installed_size=1024,
+            dependencies=[],
+            category="network"
+        ),
     ]
 
     def __init__(self):
