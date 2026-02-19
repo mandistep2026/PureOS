@@ -286,7 +286,7 @@ class NetworkManager:
     def list_routes(self) -> List[RoutingEntry]:
         return self.routes
 
-    def ping(self, target: str, count: int = 4, timeout: float = 2.0) -> Tuple[bool, List[Dict]]:
+    def ping(self, target: str, count: int = 4, timeout: float = 2.0) -> Tuple[bool, List[Dict], str]:
         results = []
         success = True
 
