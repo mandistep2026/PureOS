@@ -416,6 +416,56 @@ When a background job completes, you'll see:
 - [ ] Graphical interface (using curses)
 - [ ] More utilities: `find`, `tar`, `gzip`
 
+## What's New in v1.5
+
+### Package Manager
+PureOS now includes a full-featured package manager for installing and managing software packages:
+
+```bash
+# Install a package
+pkg install vim
+pkg install git
+
+# Remove a package
+pkg remove vim
+
+# List installed packages
+pkg list
+
+# List all available packages
+pkg list -a
+
+# Search for packages
+pkg search editor
+pkg search network
+
+# Get package information
+pkg info git
+pkg depends git
+```
+
+### Available Packages
+PureOS includes 25 pre-built packages across categories:
+- **Editors**: vim, nano
+- **Network**: curl, wget, openssh, nginx, wireshark
+- **Development**: git, gcc, make
+- **Languages**: python3, node
+- **Shells**: bash, zsh
+- **Terminal**: tmux, screen
+- **System**: htop, tree, jq
+- **Archive**: zip, unzip, tar, gzip
+- **Database**: sqlite, redis
+
+### Dependency Management
+The package manager automatically handles dependencies:
+```bash
+# Installing git will also install its dependency (curl)
+pkg install git
+```
+
+### Package Categories
+Packages are organized by category: editors, network, devel, lang, shells, terminal, system, utils, archive, database
+
 ## About
 
 PureOS demonstrates how operating system concepts can be implemented using only Python's standard library. It's perfect for:
