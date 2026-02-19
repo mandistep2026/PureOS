@@ -125,6 +125,7 @@ class Kernel:
         self.scheduler = Scheduler()
         self._shutdown = False
         self._kernel_thread: Optional[threading.Thread] = None
+        self._boot_time: Optional[float] = None
     
     def create_process(self, name: str, code: Callable, 
                       priority: int = 5, 
@@ -221,6 +222,7 @@ class Kernel:
     def start(self) -> None:
         """Start the kernel scheduler."""
         self._shutdown = False
+        self._boot_time = time.time()
         self._kernel_thread = threading.Thread(target=self._kernel_loop, daemon=True)
         self._kernel_thread.start()
     
@@ -250,6 +252,12 @@ class Kernel:
             else:
                 # No processes, sleep briefly
                 time.sleep(0.01)
+
+    def get_uptime(self) -> float:
+        """Get system uptime in seconds."""
+        if self._boot_time is None:
+            return 0.0
+        return max(0.0, time.time() - self._boot_time)
     
     def get_system_info(self) -> Dict[str, Any]:
         """Get system information."""
@@ -258,6 +266,7 @@ class Kernel:
             "free_memory": self.memory_manager.get_free_memory(),
             "used_memory": self.memory_manager.used_memory,
             "process_count": len(self.processes),
+            "uptime_seconds": self.get_uptime(),
             "running_processes": len([p for p in self.processes.values() 
                                      if p.state == ProcessState.RUNNING]),
         }

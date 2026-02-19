@@ -377,6 +377,39 @@ class PureOS:
         except Exception as e:
             print(f"  FAIL: {e}")
             failed += 1
+
+        # Test 9: Uptime tracking
+        print("Test 9: Uptime tracking...")
+        try:
+            import time
+            kernel = Kernel()
+            kernel.start()
+            time.sleep(0.05)
+            assert kernel.get_uptime() > 0
+            info = kernel.get_system_info()
+            assert info["uptime_seconds"] > 0
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 10: Command discovery tools
+        print("Test 10: Command discovery tools...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "which" in shell.commands
+            assert "type" in shell.commands
+            assert shell.execute("type ls") == 0
+            assert shell.execute("type definitely_missing_cmd") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
         
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
@@ -403,6 +436,7 @@ def show_help():
     print("  uname     System information")
     print("  free      Memory usage")
     print("  df        Disk usage")
+    print("  uptime    System uptime")
     print("  echo      Print text")
     print("  help      Show help")
     print("  clear     Clear screen")
@@ -410,6 +444,8 @@ def show_help():
     print("  whoami    Current user")
     print("  env       Environment variables")
     print("  export    Set environment variable")
+    print("  which     Locate a command")
+    print("  type      Describe command type")
     print("  reboot    Reboot system")
     print("  shutdown  Power off")
     print("  exit      Exit shell")

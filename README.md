@@ -38,6 +38,7 @@ An operating system written entirely in Python using only the standard library. 
 - `uname` - System information
 - `free` - Memory usage display
 - `df` - Disk space usage
+- `uptime` - Show system uptime
 
 #### Utilities
 - `echo` - Display text
@@ -47,6 +48,8 @@ An operating system written entirely in Python using only the standard library. 
 - `whoami` - Current user
 - `env` - Environment variables
 - `export` - Set environment variables
+- `which` - Locate a command
+- `type` - Describe command type
 
 #### Text Editing
 - `nano <file>` - Edit files with built-in text editor
