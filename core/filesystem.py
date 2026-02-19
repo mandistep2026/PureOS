@@ -59,6 +59,7 @@ class FileSystem:
         self.mkdir("/tmp")
         self.mkdir("/var")
         self.mkdir("/proc")
+        self.mkdir("/proc/net")
         self.mkdir("/dev")
         self.mkdir("/root")
     
