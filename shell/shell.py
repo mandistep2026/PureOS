@@ -160,6 +160,26 @@ class Shell:
             self.register_command(PkgCommand())
         except:
             pass
+        
+        # Network commands
+        try:
+            from shell.netcommand import (
+                IfconfigCommand, PingCommand, NetstatCommand, IpCommand,
+                HostnameCommand, TracerouteCommand, DigCommand, NslookupCommand,
+                RouteCommand, ArpCommand
+            )
+            self.register_command(IfconfigCommand())
+            self.register_command(PingCommand())
+            self.register_command(NetstatCommand())
+            self.register_command(IpCommand())
+            self.register_command(HostnameCommand())
+            self.register_command(TracerouteCommand())
+            self.register_command(DigCommand())
+            self.register_command(NslookupCommand())
+            self.register_command(RouteCommand())
+            self.register_command(ArpCommand())
+        except:
+            pass
     
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
