@@ -376,6 +376,14 @@ def show_help():
     print("  shutdown  Power off")
     print("  exit      Exit shell")
     print("  pkg       Package manager")
+    print("  ifconfig  Configure network interface")
+    print("  ping      Send ICMP echo requests")
+    print("  netstat   Show network connections")
+    print("  ip        Show/manipulate routing")
+    print("  hostname  Show/set hostname")
+    print("  traceroute Trace network path")
+    print("  dig       DNS lookup")
+    print("  nslookup  Query DNS")
 
 
 def show_version():
