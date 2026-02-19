@@ -129,6 +129,7 @@ class Shell:
         self.register_command(EnvCommand())
         self.register_command(ExportCommand())
         self.register_command(HistoryCommand())
+        self.register_command(SleepCommand())
         
         # Aliases
         self.register_command(AliasCommand())
@@ -464,14 +465,17 @@ class Shell:
         """Run the shell interactively."""
         self.running = True
 
-        print("PureOS Shell v1.3")
+        print("PureOS Shell v1.4")
         print("Type 'help' for available commands")
         print("Use '!!' to repeat last command, '!n' to run command #n")
+        print("Use 'command &' for background, 'jobs', 'fg', 'bg' for job control")
         print("Press Tab for completion, Ctrl+A/E for line editing")
         print()
 
         while self.running:
             try:
+                self._check_background_jobs()
+
                 prompt = self.get_prompt()
 
                 # Use line editor if available, otherwise fallback to input()
@@ -1757,3 +1761,140 @@ class UnaliasCommand(ShellCommand):
                 exit_code = 1
 
         return exit_code
+
+
+class JobsCommand(ShellCommand):
+    """List active jobs."""
+
+    def __init__(self):
+        super().__init__("jobs", "List active jobs")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.job_manager:
+            print("jobs: job control not available")
+            return 1
+
+        show_pid = "-l" in args or "-p" in args
+
+        jobs = shell.job_manager.list_jobs()
+        if not jobs:
+            return 0
+
+        for line in shell.job_manager.format_jobs_list(show_pid):
+            print(line)
+
+        return 0
+
+
+class FgCommand(ShellCommand):
+    """Bring a job to the foreground."""
+
+    def __init__(self):
+        super().__init__("fg", "Bring job to foreground")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.job_manager:
+            print("fg: job control not available")
+            return 1
+
+        job_spec = args[0] if args else None
+        job = shell.job_manager.parse_job_spec(job_spec or '')
+
+        if not job:
+            if job_spec:
+                print(f"fg: {job_spec}: no such job")
+            else:
+                print("fg: no current job")
+            return 1
+
+        if job.state.value == "Stopped":
+            if shell.job_manager.continue_job(job.job_id, background=False):
+                print(job.command)
+            else:
+                print(f"fg: {job.job_id}: could not continue job")
+                return 1
+        elif job.state.value == "Running":
+            print(job.command)
+        else:
+            print(f"fg: {job.job_id}: job has terminated")
+            return 1
+
+        shell.foreground_job = job
+        shell.foreground_job_id = job.job_id
+
+        if job.thread and job.thread.is_alive():
+            job.thread.join()
+
+        shell.foreground_job = None
+        shell.foreground_job_id = None
+
+        if shell.job_manager.get_job(job.job_id):
+            shell.job_manager.finish_job(job.job_id, job.exit_code or 0)
+
+        return job.exit_code or 0
+
+
+class BgCommand(ShellCommand):
+    """Resume a stopped job in the background."""
+
+    def __init__(self):
+        super().__init__("bg", "Resume job in background")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.job_manager:
+            print("bg: job control not available")
+            return 1
+
+        job_spec = args[0] if args else None
+        job = shell.job_manager.parse_job_spec(job_spec or '')
+
+        if not job:
+            if job_spec:
+                print(f"bg: {job_spec}: no such job")
+            else:
+                print("bg: no current job")
+            return 1
+
+        if job.state.value != "Stopped":
+            print(f"bg: job {job.job_id} already in background")
+            return 1
+
+        if shell.job_manager.continue_job(job.job_id, background=True):
+            print(f"[{job.job_id}] {job.command}")
+            return 0
+        else:
+            print(f"bg: {job.job_id}: could not continue job")
+            return 1
+
+
+class WaitCommand(ShellCommand):
+    """Wait for background jobs to complete."""
+
+    def __init__(self):
+        super().__init__("wait", "Wait for background jobs")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.job_manager:
+            print("wait: job control not available")
+            return 1
+
+        if args:
+            job = shell.job_manager.parse_job_spec(args[0])
+            if not job:
+                print(f"wait: {args[0]}: no such job")
+                return 1
+
+            if job.thread and job.thread.is_alive():
+                job.thread.join()
+
+            shell.job_manager.finish_job(job.job_id, job.exit_code or 0)
+            return job.exit_code or 0
+        else:
+            jobs = shell.job_manager.list_jobs()
+            for job in jobs:
+                if job.thread and job.thread.is_alive():
+                    job.thread.join()
+                shell.job_manager.finish_job(job.job_id, job.exit_code or 0)
+
+            return 0
+
