@@ -55,6 +55,16 @@ class Shell:
         # Command history
         self.history: List[str] = []
         self.history_position = 0
+        # Job management
+        self.job_manager = None
+        try:
+            from core.jobs import JobManager
+            self.job_manager = JobManager(kernel)
+        except:
+            pass
+        # Foreground job tracking
+        self.foreground_job = None
+        self.foreground_job_id = None
         # Line editor for advanced input
         self.line_editor = None
         try:
