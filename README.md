@@ -56,6 +56,16 @@ An operating system written entirely in Python using only the standard library. 
 - `shutdown` - Power off
 - `exit` - Exit shell
 
+#### Package Manager
+- `pkg install <package>` - Install a package
+- `pkg remove <package>` - Remove a package
+- `pkg list` - List installed packages
+- `pkg list -a` - List all available packages
+- `pkg search <query>` - Search for packages
+- `pkg info <package>` - Show package information
+- `pkg update` - Update package database
+- `pkg depends <package>` - Show package dependencies
+
 #### Persistence
 - `save` - Manually save system state
 - `load` - Load previously saved state
