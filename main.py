@@ -541,6 +541,34 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 17: rm option parsing
+        print("Test 17: rm option parsing...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("mkdir -p /tmp/rm_opts/sub") == 0
+            assert shell.execute("touch /tmp/rm_opts/sub/file.txt") == 0
+            assert shell.execute("rm -rf /tmp/rm_opts") == 0
+            assert not fs.exists("/tmp/rm_opts")
+
+            assert shell.execute("mkdir -p /tmp/rm_long/sub") == 0
+            assert shell.execute("touch /tmp/rm_long/sub/file.txt") == 0
+            assert shell.execute("rm --recursive --force /tmp/rm_long") == 0
+            assert not fs.exists("/tmp/rm_long")
+
+            assert shell.execute("touch /tmp/rm_dash_file") == 0
+            assert shell.execute("rm -- /tmp/rm_dash_file") == 0
+            assert not fs.exists("/tmp/rm_dash_file")
+
+            assert shell.execute("rm -z /tmp/nowhere") == 1
+            assert shell.execute("rm --bad-option /tmp/nowhere") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         

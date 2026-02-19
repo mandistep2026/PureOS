@@ -738,10 +738,43 @@ class RmCommand(ShellCommand):
         if not args:
             print("rm: missing operand")
             return 1
-        
-        recursive = "-r" in args or "-rf" in args
-        force = "-f" in args or "-rf" in args
-        paths = [a for a in args if not a.startswith("-")]
+
+        recursive = False
+        force = False
+        paths: List[str] = []
+        parse_options = True
+
+        for arg in args:
+            if parse_options and arg == "--":
+                parse_options = False
+                continue
+
+            if parse_options and arg.startswith("--"):
+                if arg == "--recursive":
+                    recursive = True
+                    continue
+                if arg == "--force":
+                    force = True
+                    continue
+                print(f"rm: unrecognized option '{arg}'")
+                return 1
+
+            if parse_options and arg.startswith("-") and arg != "-":
+                for flag in arg[1:]:
+                    if flag == "r":
+                        recursive = True
+                    elif flag == "f":
+                        force = True
+                    else:
+                        print(f"rm: invalid option -- '{flag}'")
+                        return 1
+                continue
+
+            paths.append(arg)
+
+        if not paths:
+            print("rm: missing operand")
+            return 1
         
         for path in paths:
             if shell.fs.is_directory(path):
