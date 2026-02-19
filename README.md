@@ -334,6 +334,56 @@ PureOS is designed to be simple and educational. Contributions should maintain:
 - **Line continuation**: End line with `\` to continue on next line
 - **PS2 prompt**: Shows continuation prompt (default: `>`)
 
+## What's New in v1.4
+
+### Job Control
+Unix-style job control for managing background and foreground processes:
+
+```bash
+# Run command in background
+sleep 10 &
+
+# List all jobs
+jobs
+
+# Job listing output:
+[1]+  Running      sleep 10 &
+[2]-  Stopped      nano myfile.txt
+
+# Bring job to foreground
+fg %1
+
+# Resume stopped job in background
+bg %2
+
+# Wait for all background jobs
+wait
+
+# Wait for specific job
+wait %1
+```
+
+### Job Control Commands
+- **`command &`**: Execute command in background
+- **`jobs`**: List all active jobs with their status
+- **`jobs -l`**: List jobs with process IDs
+- **`fg [%job]`**: Bring job to foreground (default: current job)
+- **`bg [%job]`**: Resume stopped job in background
+- **`wait [%job]`**: Wait for background job(s) to complete
+- **`sleep N`**: Pause for N seconds (useful for testing)
+
+### Job Specifications
+Jobs can be referenced by:
+- **`%n`**: Job number n
+- **`%%`** or **`%+`**: Current job
+- **`%-`**: Previous job
+
+### Background Job Notifications
+When a background job completes, you'll see:
+```
+[1]+  Done                    sleep 10
+```
+
 ## Future Enhancements
 
 ### Completed Features ✓
