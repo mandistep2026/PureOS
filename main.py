@@ -405,6 +405,9 @@ class PureOS:
             assert "type" in shell.commands
             assert shell.execute("type ls") == 0
             assert shell.execute("type definitely_missing_cmd") == 1
+            assert shell.execute("which -a ls") == 0
+            assert shell.execute("type -a ls") == 0
+            assert shell.execute("which -a definitely_missing_cmd") == 1
             print("  PASS")
             passed += 1
         except Exception as e:
