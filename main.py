@@ -131,10 +131,72 @@ class PureOS:
 
         print("System halted.")
     
+    def _login_prompt(self) -> bool:
+        """Display login prompt and authenticate user.
+        
+        Returns:
+            True if login successful, False otherwise
+        """
+        print("\n" + "=" * 50)
+        print("PureOS v1.2 - Login")
+        print("=" * 50)
+        print()
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                username = input("Username: ").strip()
+                if not username:
+                    print("Error: Username required")
+                    continue
+                
+                if not self.user_manager.user_exists(username):
+                    print("Error: Invalid username or password")
+                    continue
+                
+                # Get password
+                import getpass
+                password = getpass.getpass("Password: ")
+                
+                # Attempt authentication
+                success, result = self.authenticator.login(username, password)
+                
+                if success:
+                    print(f"\nWelcome, {username}!")
+                    if username == "alice":
+                        print("Default password is: password123")
+                        print("Change it with: passwd")
+                    print()
+                    
+                    # Set up user environment
+                    user = self.user_manager.get_user(username)
+                    if user:
+                        self.shell.environment["USER"] = username
+                        self.shell.environment["HOME"] = user.home_dir
+                        self.filesystem.change_directory(user.home_dir)
+                    
+                    return True
+                else:
+                    print(f"Error: {result}")
+                    
+            except (EOFError, KeyboardInterrupt):
+                print("\n")
+                return False
+        
+        print("\nMaximum login attempts exceeded")
+        return False
+    
     def run(self) -> int:
         """Run the operating system."""
         if not self.initialize():
             return 1
+        
+        # Show login prompt if enabled
+        if self.require_login and self.authenticator:
+            if not self._login_prompt():
+                print("Login failed, shutting down...")
+                self.shutdown()
+                return 1
         
         try:
             if self.shell is not None:
