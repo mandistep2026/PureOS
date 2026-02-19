@@ -108,6 +108,7 @@ class Shell:
         self.register_command(GrepCommand())
         self.register_command(HeadCommand())
         self.register_command(TailCommand())
+        self.register_command(WcCommand())
         
         # System info
         self.register_command(PsCommand())
@@ -1451,6 +1452,85 @@ class TailCommand(ShellCommand):
         start = max(0, len(lines) - lines_count)
         for line in lines[start:]:
             print(line)
+
+        return 0
+
+
+class WcCommand(ShellCommand):
+    """Count lines, words, and bytes in files."""
+
+    def __init__(self):
+        super().__init__("wc", "Print line, word, and byte counts for files")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: wc [-l] [-w] [-c] <file>")
+            return 1
+
+        show_lines = False
+        show_words = False
+        show_bytes = False
+        filenames = []
+
+        for arg in args:
+            if arg == '-l':
+                show_lines = True
+            elif arg == '-w':
+                show_words = True
+            elif arg == '-c':
+                show_bytes = True
+            elif arg.startswith('-'):
+                print(f"wc: invalid option -- '{arg}'")
+                return 1
+            else:
+                filenames.append(arg)
+
+        if not filenames:
+            print("wc: missing file operand")
+            return 1
+
+        if not (show_lines or show_words or show_bytes):
+            show_lines = True
+            show_words = True
+            show_bytes = True
+
+        totals = {'lines': 0, 'words': 0, 'bytes': 0}
+
+        for filename in filenames:
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"wc: {filename}: No such file or directory")
+                return 1
+
+            text = content.decode('utf-8', errors='replace')
+            line_count = len(text.splitlines())
+            word_count = len(text.split())
+            byte_count = len(content)
+
+            totals['lines'] += line_count
+            totals['words'] += word_count
+            totals['bytes'] += byte_count
+
+            output_parts = []
+            if show_lines:
+                output_parts.append(str(line_count))
+            if show_words:
+                output_parts.append(str(word_count))
+            if show_bytes:
+                output_parts.append(str(byte_count))
+            output_parts.append(filename)
+            print(' '.join(output_parts))
+
+        if len(filenames) > 1:
+            output_parts = []
+            if show_lines:
+                output_parts.append(str(totals['lines']))
+            if show_words:
+                output_parts.append(str(totals['words']))
+            if show_bytes:
+                output_parts.append(str(totals['bytes']))
+            output_parts.append('total')
+            print(' '.join(output_parts))
 
         return 0
 
