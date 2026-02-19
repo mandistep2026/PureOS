@@ -474,6 +474,58 @@ PureOS demonstrates how operating system concepts can be implemented using only 
 - Prototyping OS features
 - Understanding process management
 
+## What's New in v1.6
+
+### Network Stack Simulation
+PureOS now includes a full virtual network stack with realistic simulation:
+
+```bash
+# Show network interfaces
+ifconfig
+ifconfig eth0 up
+ifconfig eth0 192.168.1.50
+
+# Ping hosts
+ping 8.8.8.8
+ping -c 4 google.com
+
+# Show network connections
+netstat
+netstat -an
+
+# Modern ip utility
+ip addr show
+ip route show
+
+# Hostname
+hostname
+hostname myserver
+
+# Trace route
+traceroute google.com
+
+# DNS lookup
+dig google.com
+nslookup google.com
+```
+
+### Network Interfaces
+- **lo** (loopback): 127.0.0.1/8
+- **eth0** (ethernet): 192.168.1.100/24 (configurable)
+
+### Simulated Network
+- Ping works to local addresses, 8.8.8.8, 1.1.1.1, etc.
+- DNS resolution for popular domains (google.com, cloudflare.com, etc.)
+- Realistic RTT times for different hosts
+- Full routing table simulation
+- Traceroute shows path through simulated network
+
+### New Network Packages
+- **iperf3**: Network bandwidth measurement
+- **netcat**: Network utility for connections
+- **tcpdump**: Packet analyzer
+- **mtr**: Combined traceroute + ping
+
 ---
 
 **PureOS** - Pure Python, Pure Power!
