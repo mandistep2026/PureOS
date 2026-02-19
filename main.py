@@ -355,6 +355,7 @@ def show_help():
     print("  reboot    Reboot system")
     print("  shutdown  Power off")
     print("  exit      Exit shell")
+    print("  pkg       Package manager")
 
 
 def show_version():
