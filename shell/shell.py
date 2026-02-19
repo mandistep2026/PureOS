@@ -114,6 +114,12 @@ class Shell:
         self.register_command(SourceCommand())
         self.register_command(TestCommand())
         
+        # Job control
+        self.register_command(JobsCommand())
+        self.register_command(FgCommand())
+        self.register_command(BgCommand())
+        self.register_command(WaitCommand())
+        
         # Utilities
         self.register_command(EchoCommand())
         self.register_command(HelpCommand())
