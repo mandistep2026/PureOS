@@ -319,9 +319,27 @@ class PureOS:
         except Exception as e:
             print(f"  FAIL: {e}")
             failed += 1
+
+        # Test 6: Recursive deletion
+        print("Test 6: Recursive deletion...")
+        try:
+            fs = FileSystem()
+            assert fs.mkdir("/tmp/tree")
+            assert fs.mkdir("/tmp/tree/branch")
+            assert fs.create_file("/tmp/tree/branch/leaf.txt", b"leaf")
+            assert fs.exists("/tmp/tree/branch/leaf.txt")
+            assert fs.remove_tree("/tmp/tree")
+            assert not fs.exists("/tmp/tree")
+            assert not fs.exists("/tmp/tree/branch")
+            assert not fs.exists("/tmp/tree/branch/leaf.txt")
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
         
-        # Test 6: Package manager
-        print("Test 6: Package manager...")
+        # Test 7: Package manager
+        print("Test 7: Package manager...")
         try:
             from core.package import PackageManager
             pm = PackageManager()
@@ -340,8 +358,8 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
         
-        # Test 7: Network manager
-        print("Test 7: Network manager...")
+        # Test 8: Network manager
+        print("Test 8: Network manager...")
         try:
             from core.network import NetworkManager, NetworkInterface, NetworkState
             nm = NetworkManager()
