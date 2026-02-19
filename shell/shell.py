@@ -312,6 +312,10 @@ class Shell:
         if not command_name:
             return 0
 
+        # Handle background execution
+        if background and self.job_manager:
+            return self._execute_background(command_name, args, stripped)
+
         # Capture output if redirecting
         old_stdout = sys.stdout
         output_buffer = None
@@ -360,6 +364,50 @@ class Shell:
                 output_buffer.close()
 
         return self.last_exit_code
+    
+    def _execute_background(self, command_name: str, args: List[str], 
+                           command_line: str) -> int:
+        """Execute a command in the background."""
+        import threading
+        
+        if command_name not in self.commands:
+            print(f"{command_name}: command not found")
+            return 127
+        
+        def run_command():
+            try:
+                exit_code = self.commands[command_name].execute(args, self)
+                if self.job_manager:
+                    job = self.job_manager.get_job_by_pid(thread_id)
+                    if job:
+                        self.job_manager.finish_job(job.job_id, exit_code)
+            except Exception as e:
+                if self.job_manager:
+                    job = self.job_manager.get_job_by_pid(thread_id)
+                    if job:
+                        self.job_manager.finish_job(job.job_id, 1)
+        
+        thread = threading.Thread(target=run_command, daemon=True)
+        thread.start()
+        thread_id = thread.ident or 0
+        
+        job = self.job_manager.create_job(
+            pid=thread_id,
+            name=command_name,
+            command=command_line,
+            thread=thread
+        )
+        
+        print(f"[{job.job_id}] {thread_id}")
+        
+        return 0
+    
+    def _check_background_jobs(self) -> None:
+        """Check for completed background jobs and notify user."""
+        if self.job_manager:
+            notifications = self.job_manager.notify_completed()
+            for notification in notifications:
+                print(notification)
     
     def get_prompt(self, ps2: bool = False) -> str:
         """Generate shell prompt based on PS1/PS2 environment variables."""
