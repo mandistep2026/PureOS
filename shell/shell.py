@@ -114,8 +114,35 @@ class Shell:
         
         return parts[0], parts[1:]
     
-    def execute(self, line: str) -> int:
+    def execute(self, line: str, save_to_history: bool = True) -> int:
         """Execute a command line."""
+        stripped = line.strip()
+        
+        # Handle history commands
+        if stripped == "!!":
+            # Repeat last command
+            if not self.history:
+                print("!!: event not found")
+                return 1
+            line = self.history[-1]
+            print(f"{line}")
+            return self.execute(line, save_to_history=False)
+        
+        if stripped.startswith("!") and stripped[1:].isdigit():
+            # Execute command by history number
+            n = int(stripped[1:])
+            if n < 1 or n > len(self.history):
+                print(f"{stripped}: event not found")
+                return 1
+            line = self.history[n - 1]
+            print(f"{line}")
+            return self.execute(line, save_to_history=False)
+        
+        # Save to history (except for history commands themselves)
+        if save_to_history and stripped and not stripped.startswith("!"):
+            self.history.append(stripped)
+            self.history_position = len(self.history)
+        
         command_name, args = self.parse_input(line)
         
         if not command_name:
