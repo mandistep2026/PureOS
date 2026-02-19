@@ -41,7 +41,7 @@ from core.auth import Authenticator
 from shell.shell import Shell
 
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __author__ = "PureOS Team"
 
 
