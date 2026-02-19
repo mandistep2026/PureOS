@@ -398,11 +398,11 @@ When a background job completes, you'll see:
 - [x] Command aliases ✓ **v1.3**
 - [x] Prompt customization ✓ **v1.3**
 - [x] Wildcards/globbing ✓ **v1.3**
+- [x] Job control - Background processes (`&`, `fg`, `bg`, `jobs`) ✓ **v1.4**
 
 ### Planned Features
 - [ ] Package manager - Install/remove software packages
 - [ ] Network stack simulation - Virtual networking
-- [ ] Job control - Background processes (`&`, `fg`, `bg`)
 - [ ] Graphical interface (using curses)
 - [ ] More utilities: `find`, `tar`, `gzip`
 
