@@ -523,6 +523,24 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 16: Environment variable mutation commands
+        print("Test 16: Environment variable mutation commands...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("export PROJECT=PureOS") == 0
+            assert shell.environment.get("PROJECT") == "PureOS"
+            assert shell.execute("unset PROJECT") == 0
+            assert "PROJECT" not in shell.environment
+            assert shell.execute("export 1INVALID=bad") == 1
+            assert shell.execute("unset 1INVALID") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -559,6 +577,7 @@ def show_help():
     print("  whoami    Current user")
     print("  env       Environment variables")
     print("  export    Set environment variable")
+    print("  unset     Remove environment variable")
     print("  which     Locate a command")
     print("  type      Describe command type")
     print("  reboot    Reboot system")

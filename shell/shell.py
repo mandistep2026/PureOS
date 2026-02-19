@@ -33,6 +33,7 @@ class Shell:
     """Main shell interpreter."""
 
     _VAR_PATTERN = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*|\?))')
+    _VAR_NAME_PATTERN = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
     def __init__(self, kernel, filesystem, authenticator=None, user_manager=None):
         self.kernel = kernel
@@ -152,6 +153,7 @@ class Shell:
         self.register_command(WhoamiCommand())
         self.register_command(EnvCommand())
         self.register_command(ExportCommand())
+        self.register_command(UnsetCommand())
         self.register_command(HistoryCommand())
         self.register_command(WhichCommand())
         self.register_command(TypeCommand())
@@ -1173,16 +1175,48 @@ class ExportCommand(ShellCommand):
         if not args:
             # Print all exported variables
             return EnvCommand().execute(args, shell)
-        
+
+        status = 0
         for arg in args:
             if "=" in arg:
                 key, value = arg.split("=", 1)
+                if not shell._VAR_NAME_PATTERN.match(key):
+                    print(f"export: `{key}`: not a valid identifier")
+                    status = 1
+                    continue
                 shell.environment[key] = value
             elif arg in shell.environment:
                 # Mark as exported (already in environment)
                 pass
-        
-        return 0
+            else:
+                if not shell._VAR_NAME_PATTERN.match(arg):
+                    print(f"export: `{arg}`: not a valid identifier")
+                    status = 1
+
+        return status
+
+
+class UnsetCommand(ShellCommand):
+    """Unset environment variables."""
+
+    def __init__(self):
+        super().__init__("unset", "Unset environment variable")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("unset: usage: unset <name> [...]")
+            return 1
+
+        status = 0
+        for name in args:
+            if not shell._VAR_NAME_PATTERN.match(name):
+                print(f"unset: `{name}`: not a valid identifier")
+                status = 1
+                continue
+
+            shell.environment.pop(name, None)
+
+        return status
 
 
 class HistoryCommand(ShellCommand):
