@@ -399,9 +399,9 @@ When a background job completes, you'll see:
 - [x] Prompt customization ✓ **v1.3**
 - [x] Wildcards/globbing ✓ **v1.3**
 - [x] Job control - Background processes (`&`, `fg`, `bg`, `jobs`) ✓ **v1.4**
+- [x] Package manager - Install/remove software packages ✓ **v1.5**
 
 ### Planned Features
-- [ ] Package manager - Install/remove software packages
 - [ ] Network stack simulation - Virtual networking
 - [ ] Graphical interface (using curses)
 - [ ] More utilities: `find`, `tar`, `gzip`
