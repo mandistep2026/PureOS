@@ -7,6 +7,7 @@ import sys
 import shlex
 import time
 import fnmatch
+import re
 from io import StringIO
 from typing import List, Dict, Callable, Optional, Tuple
 from pathlib import Path
@@ -30,6 +31,8 @@ class ShellCommand:
 
 class Shell:
     """Main shell interpreter."""
+
+    _VAR_PATTERN = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*|\?))')
 
     def __init__(self, kernel, filesystem, authenticator=None, user_manager=None):
         self.kernel = kernel
@@ -209,8 +212,7 @@ class Shell:
                 break
 
         # Expand environment variables
-        for key, value in self.environment.items():
-            line = line.replace(f"${key}", value)
+        line = self._expand_environment_variables(line)
 
         try:
             parts = shlex.split(line)
@@ -234,6 +236,16 @@ class Shell:
                 expanded_parts.append(arg)
 
         return expanded_parts[0], expanded_parts[1:]
+
+    def _expand_environment_variables(self, line: str) -> str:
+        """Expand shell variables like $HOME, ${HOME}, and $?."""
+        def replacer(match: re.Match) -> str:
+            name = match.group(1) or match.group(2)
+            if name == '?':
+                return str(self.last_exit_code)
+            return self.environment.get(name, "")
+
+        return self._VAR_PATTERN.sub(replacer, line)
 
     def _expand_wildcard(self, pattern: str) -> List[str]:
         """Expand wildcard pattern to matching files."""

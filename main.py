@@ -499,6 +499,27 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+
+        # Test 15: Environment variable expansion
+        print("Test 15: Environment variable expansion...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.environment["PROJECT"] = "PureOS"
+            command, args = shell.parse_input("echo ${PROJECT} $HOME")
+            assert command == "echo"
+            assert args == ["PureOS", "/root"]
+            assert shell.execute("which definitely_missing_cmd") == 1
+            command, args = shell.parse_input("echo $?")
+            assert command == "echo"
+            assert args == ["1"]
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
