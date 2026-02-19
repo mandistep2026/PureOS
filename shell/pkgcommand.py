@@ -13,6 +13,9 @@ class PkgCommand(ShellCommand):
 
     def execute(self, args: List[str], shell) -> int:
         if not self.pm:
+            self.pm = shell.package_manager
+
+        if not self.pm:
             try:
                 from core.package import PackageManager
                 self.pm = PackageManager(shell.fs)
