@@ -36,10 +36,12 @@ if __name__ == "__main__":
 from core.kernel import Kernel
 from core.filesystem import FileSystem
 from core.persistence import PersistenceManager
+from core.user import UserManager
+from core.auth import Authenticator
 from shell.shell import Shell
 
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "PureOS Team"
 
 
@@ -50,10 +52,13 @@ class PureOS:
         self.kernel = None
         self.filesystem = None
         self.shell = None
+        self.user_manager = None
+        self.authenticator = None
         self.running = False
         self.persistence = PersistenceManager()
         self.auto_save = True
         self.state_loaded = False
+        self.require_login = True  # Enable login system
 
     def initialize(self) -> bool:
         """Initialize the operating system."""
@@ -61,20 +66,26 @@ class PureOS:
 
         try:
             # Initialize kernel
-            print("  [1/4] Starting kernel...")
+            print("  [1/5] Starting kernel...")
             self.kernel = Kernel()
             self.kernel.start()
 
             # Initialize filesystem
-            print("  [2/4] Mounting filesystem...")
+            print("  [2/5] Mounting filesystem...")
             self.filesystem = FileSystem()
 
-            # Initialize shell
-            print("  [3/4] Loading shell...")
-            self.shell = Shell(self.kernel, self.filesystem)
+            # Initialize user management
+            print("  [3/5] Initializing user management...")
+            self.user_manager = UserManager(self.filesystem)
+            self.authenticator = Authenticator(self.user_manager)
+
+            # Initialize shell with auth and user manager
+            print("  [4/5] Loading shell...")
+            self.shell = Shell(self.kernel, self.filesystem, 
+                             self.authenticator, self.user_manager)
 
             # Try to load saved state
-            print("  [4/4] Checking for saved state...")
+            print("  [5/5] Checking for saved state...")
             if self.persistence.state_exists():
                 info = self.persistence.get_state_info()
                 if info:
