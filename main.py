@@ -340,6 +340,26 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
         
+        # Test 7: Network manager
+        print("Test 7: Network manager...")
+        try:
+            from core.network import NetworkManager, NetworkInterface, NetworkState
+            nm = NetworkManager()
+            assert nm.get_hostname() == "pureos"
+            nm.set_hostname("testhost")
+            assert nm.get_hostname() == "testhost"
+            iface = nm.get_interface("eth0")
+            assert iface is not None
+            assert iface.ip_address == "192.168.1.100"
+            success, results, hostname = nm.ping("8.8.8.8", 2)
+            assert success == True
+            assert len(results) == 2
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+        
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
