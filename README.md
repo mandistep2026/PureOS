@@ -48,8 +48,8 @@ An operating system written entirely in Python using only the standard library. 
 - `whoami` - Current user
 - `env` - Environment variables
 - `export` - Set environment variables
-- `which` - Locate a command
-- `type` - Describe command type
+- `which` - Locate a command (supports `-a` to show all matches)
+- `type` - Describe command type (supports `-a` to show alias/builtin/path matches)
 
 #### Text Editing
 - `nano <file>` - Edit files with built-in text editor

@@ -1103,25 +1103,60 @@ class WhichCommand(ShellCommand):
                 return candidate
         return None
 
+    def _find_all_in_path(self, name: str, shell) -> List[str]:
+        if "/" in name:
+            if shell.fs.exists(name) and not shell.fs.is_directory(name):
+                return [name]
+            return []
+
+        matches: List[str] = []
+        path_env = shell.environment.get("PATH", "")
+        for base in [p for p in path_env.split(":") if p]:
+            candidate = base.rstrip("/") + "/" + name
+            if shell.fs.exists(candidate) and not shell.fs.is_directory(candidate):
+                matches.append(candidate)
+        return matches
+
     def execute(self, args: List[str], shell) -> int:
         if not args:
-            print("which: usage: which <command> [...]")
+            print("which: usage: which [-a] <command> [...]")
+            return 1
+
+        show_all = False
+        filtered_args: List[str] = []
+        for arg in args:
+            if arg == "-a":
+                show_all = True
+            else:
+                filtered_args.append(arg)
+
+        if not filtered_args:
+            print("which: usage: which [-a] <command> [...]")
             return 1
 
         status = 0
-        for name in args:
+        for name in filtered_args:
+            found = False
             if name in shell.aliases:
                 print(f"alias {name}='{shell.aliases[name]}'")
-                continue
+                found = True
+                if not show_all:
+                    continue
 
             if name in shell.commands:
                 print(name)
-                continue
+                found = True
+                if not show_all:
+                    continue
 
-            location = self._find_in_path(name, shell)
-            if location:
+            locations = self._find_all_in_path(name, shell) if show_all else [self._find_in_path(name, shell)]
+            printed_locations = [loc for loc in locations if loc]
+            for location in printed_locations:
                 print(location)
-            else:
+            if printed_locations:
+                found = True
+
+            if not found:
                 status = 1
 
         return status
@@ -1135,24 +1170,45 @@ class TypeCommand(ShellCommand):
 
     def execute(self, args: List[str], shell) -> int:
         if not args:
-            print("type: usage: type <command> [...]")
+            print("type: usage: type [-a] <command> [...]")
+            return 1
+
+        show_all = False
+        filtered_args: List[str] = []
+        for arg in args:
+            if arg == "-a":
+                show_all = True
+            else:
+                filtered_args.append(arg)
+
+        if not filtered_args:
+            print("type: usage: type [-a] <command> [...]")
             return 1
 
         which = WhichCommand()
         status = 0
-        for name in args:
+        for name in filtered_args:
+            found = False
             if name in shell.aliases:
                 print(f"{name} is an alias for {shell.aliases[name]}")
-                continue
+                found = True
+                if not show_all:
+                    continue
 
             if name in shell.commands:
                 print(f"{name} is a shell builtin")
-                continue
+                found = True
+                if not show_all:
+                    continue
 
-            location = which._find_in_path(name, shell)
-            if location:
+            locations = which._find_all_in_path(name, shell) if show_all else [which._find_in_path(name, shell)]
+            printed_locations = [loc for loc in locations if loc]
+            for location in printed_locations:
                 print(f"{name} is {location}")
-            else:
+            if printed_locations:
+                found = True
+
+            if not found:
                 print(f"type: {name}: not found")
                 status = 1
 
