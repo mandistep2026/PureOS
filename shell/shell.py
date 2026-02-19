@@ -259,6 +259,13 @@ class Shell:
         """Execute a command line."""
         stripped = line.strip()
 
+        # Check for background execution (&)
+        background = False
+        if stripped.endswith('&'):
+            background = True
+            stripped = stripped[:-1].strip()
+            line = stripped
+
         # Handle history commands
         if stripped == "!!":
             # Repeat last command
