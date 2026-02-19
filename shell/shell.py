@@ -661,13 +661,24 @@ class ExportCommand(ShellCommand):
 
 class HistoryCommand(ShellCommand):
     """Show command history."""
-    
+
     def __init__(self):
         super().__init__("history", "Show command history")
-        self.history = []
-    
+
     def execute(self, args: List[str], shell) -> int:
-        print("Command history not yet implemented")
+        # Show last N commands (default: all)
+        count = len(shell.history)
+        if args:
+            try:
+                count = int(args[0])
+            except ValueError:
+                print(f"history: {args[0]}: invalid number")
+                return 1
+
+        start = max(0, len(shell.history) - count)
+        for i, cmd in enumerate(shell.history[start:], start=start):
+            print(f" {i+1:4d}  {cmd}")
+
         return 0
 
 
