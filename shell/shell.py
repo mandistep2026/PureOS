@@ -29,7 +29,7 @@ class ShellCommand:
 
 class Shell:
     """Main shell interpreter."""
-    
+
     def __init__(self, kernel, filesystem, authenticator=None, user_manager=None):
         self.kernel = kernel
         self.fs = filesystem
@@ -38,17 +38,30 @@ class Shell:
         self.commands: Dict[str, ShellCommand] = {}
         self.running = False
         self.last_exit_code = 0
-        self.aliases: Dict[str, str] = {}
+        self.aliases: Dict[str, str] = {
+            'll': 'ls -la',
+            'la': 'ls -a',
+            'l': 'ls -CF',
+        }
         self.environment: Dict[str, str] = {
             "PATH": "/bin",
             "HOME": "/root",
             "USER": "root",
             "SHELL": "/bin/sh",
             "TERM": "xterm",
+            "PS1": "\\u@\\h:\\w\\$ ",
+            "PS2": "> ",
         }
         # Command history
         self.history: List[str] = []
         self.history_position = 0
+        # Line editor for advanced input
+        self.line_editor = None
+        try:
+            from shell.completion import LineEditor
+            self.line_editor = LineEditor(self)
+        except:
+            pass
         self._register_commands()
     
     def _register_commands(self) -> None:
@@ -101,6 +114,10 @@ class Shell:
         self.register_command(ExportCommand())
         self.register_command(HistoryCommand())
         
+        # Aliases
+        self.register_command(AliasCommand())
+        self.register_command(UnaliasCommand())
+
         # System
         self.register_command(RebootCommand())
         self.register_command(ShutdownCommand())
@@ -235,35 +252,93 @@ class Shell:
 
         return self.last_exit_code
     
-    def get_prompt(self) -> str:
-        """Generate shell prompt based on current user."""
+    def get_prompt(self, ps2: bool = False) -> str:
+        """Generate shell prompt based on PS1/PS2 environment variables."""
+        if ps2:
+            ps = self.environment.get('PS2', '> ')
+        else:
+            ps = self.environment.get('PS1', '\\u@\\h:\\w\\$ ')
+
+        # Get current values
         if self.auth and self.auth.is_authenticated():
-            username = self.auth.get_current_user()
+            username = self.auth.get_current_user() or 'user'
         else:
             username = self.environment.get('USER', 'user')
-        
+
+        # Get hostname
+        hostname = 'pureos'
+
+        # Get working directory
         cwd = self.fs.get_current_directory()
-        # Replace home directory with ~
         if self.auth:
             home = self.auth.get_user_home()
             if cwd.startswith(home):
                 cwd = "~" + cwd[len(home):]
-        
-        return f"{username}@pureos:{cwd}$ "
+
+        # Get basename of cwd
+        cwd_basename = cwd.split('/')[-1] if cwd != '/' else '/'
+
+        # Get prompt character ($ for user, # for root)
+        prompt_char = '#' if (self.auth and self.auth.get_current_uid() == 0) else '$'
+
+        # Get current time
+        import time
+        current_time = time.strftime('%H:%M:%S')
+        current_time_12h = time.strftime('%I:%M:%S')
+        current_date = time.strftime('%a %b %d')
+
+        # Replace escape sequences
+        result = ps
+        result = result.replace('\\u', username)
+        result = result.replace('\\h', hostname)
+        result = result.replace('\\H', hostname)
+        result = result.replace('\\w', cwd)
+        result = result.replace('\\W', cwd_basename)
+        result = result.replace('\\$', prompt_char)
+        result = result.replace('\\t', current_time)
+        result = result.replace('\\T', current_time_12h)
+        result = result.replace('\\d', current_date)
+        result = result.replace('\\\\', '\\')
+        result = result.replace('\\n', '\n')
+
+        return result
     
     def run(self) -> None:
         """Run the shell interactively."""
         self.running = True
 
-        print("PureOS Shell v1.0")
+        print("PureOS Shell v1.3")
         print("Type 'help' for available commands")
         print("Use '!!' to repeat last command, '!n' to run command #n")
+        print("Press Tab for completion, Ctrl+A/E for line editing")
         print()
 
         while self.running:
             try:
                 prompt = self.get_prompt()
-                line = input(prompt)
+
+                # Use line editor if available, otherwise fallback to input()
+                if self.line_editor:
+                    try:
+                        line = self.line_editor.read_line(prompt)
+                    except:
+                        line = input(prompt)
+                else:
+                    line = input(prompt)
+
+                # Handle multi-line input (line continuation)
+                while line.rstrip().endswith('\\'):
+                    line = line[:-1]  # Remove backslash
+                    ps2_prompt = self.get_prompt(ps2=True)
+                    if self.line_editor:
+                        try:
+                            next_line = self.line_editor.read_line(ps2_prompt)
+                        except:
+                            next_line = input(ps2_prompt)
+                    else:
+                        next_line = input(ps2_prompt)
+                    line += next_line
+
                 self.execute(line)
             except KeyboardInterrupt:
                 print()
@@ -1457,3 +1532,71 @@ class TestCommand(ShellCommand):
             return 0 if len(args[1]) > 0 else 1
 
         return 1  # False
+
+
+class AliasCommand(ShellCommand):
+    """Define or display aliases."""
+
+    def __init__(self):
+        super().__init__("alias", "Define or display aliases")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            # Display all aliases
+            for name, value in sorted(shell.aliases.items()):
+                print(f"alias {name}='{value}'")
+            return 0
+
+        # Check if it's a definition or query
+        arg = ' '.join(args)
+
+        if '=' in arg:
+            # Defining an alias: name='value' or name=value
+            parts = arg.split('=', 1)
+            name = parts[0].strip()
+            value = parts[1].strip()
+
+            # Remove quotes if present
+            if (value.startswith('"') and value.endswith('"')) or \
+               (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+
+            shell.aliases[name] = value
+            return 0
+        else:
+            # Querying specific alias
+            name = arg.strip()
+            if name in shell.aliases:
+                print(f"alias {name}='{shell.aliases[name]}'")
+                return 0
+            else:
+                print(f"alias: {name}: not found")
+                return 1
+
+
+class UnaliasCommand(ShellCommand):
+    """Remove alias definitions."""
+
+    def __init__(self):
+        super().__init__("unalias", "Remove alias definitions")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: unalias [-a] name [name ...]")
+            return 1
+
+        if args[0] == '-a':
+            # Remove all aliases
+            shell.aliases.clear()
+            return 0
+
+        # Remove specific aliases
+        exit_code = 0
+        for name in args:
+            if name in shell.aliases:
+                del shell.aliases[name]
+            else:
+                print(f"unalias: {name}: not found")
+                exit_code = 1
+
+        return exit_code
