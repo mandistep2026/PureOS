@@ -109,6 +109,55 @@ Editor controls:
 - `Ctrl+D` - Delete line
 - Arrow keys - Navigate
 
+## New Features in v1.2
+
+### Multi-User System
+PureOS now supports multiple users with authentication:
+
+```bash
+# Login
+PureOS v1.2 - Login
+Username: alice
+Password: *****
+
+# Create new users (requires root)
+useradd -m newuser
+passwd newuser
+
+# Switch users
+su username
+
+# Show current user
+whoami
+id
+
+# List active sessions
+who
+```
+
+### Shell Scripting
+Full scripting support with variables, conditionals, and loops:
+
+```bash
+#!/bin/sh
+# Example script
+
+NAME="PureOS"
+if [ -f "/etc/config" ]; then
+    echo "Config exists"
+else
+    echo "Creating config..."
+fi
+
+for user in root alice bob; do
+    echo "User: $user"
+done
+
+# Execute script
+bash script.sh
+source script.sh
+```
+
 ## Example Session
 
 ```
