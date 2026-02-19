@@ -1898,3 +1898,26 @@ class WaitCommand(ShellCommand):
 
             return 0
 
+
+class SleepCommand(ShellCommand):
+    """Pause for a specified amount of time."""
+
+    def __init__(self):
+        super().__init__("sleep", "Pause for specified seconds")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("sleep: missing operand")
+            return 1
+
+        try:
+            seconds = float(args[0])
+            if seconds < 0:
+                print("sleep: invalid time interval")
+                return 1
+            time.sleep(seconds)
+            return 0
+        except ValueError:
+            print(f"sleep: invalid time interval '{args[0]}'")
+            return 1
+
