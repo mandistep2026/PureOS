@@ -43,6 +43,9 @@ class Shell:
             "SHELL": "/bin/sh",
             "TERM": "xterm",
         }
+        # Command history
+        self.history: List[str] = []
+        self.history_position = 0
         self._register_commands()
     
     def _register_commands(self) -> None:
