@@ -994,3 +994,342 @@ class LoadCommand(ShellCommand):
         except Exception as e:
             print(f"load: {e}")
             return 1
+
+
+class UseraddCommand(ShellCommand):
+    """Create a new user account."""
+
+    def __init__(self):
+        super().__init__("useradd", "Create a new user account")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.um:
+            print("useradd: user management not available")
+            return 1
+
+        # Check if running as root
+        if shell.auth and shell.auth.get_current_uid() != 0:
+            print("useradd: Permission denied (requires root)")
+            return 1
+
+        # Parse options
+        create_home = False
+        shell_path = "/bin/sh"
+        username = None
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-m":
+                create_home = True
+                i += 1
+            elif arg == "-s" and i + 1 < len(args):
+                shell_path = args[i + 1]
+                i += 2
+            elif not arg.startswith("-"):
+                username = arg
+                i += 1
+            else:
+                print(f"useradd: invalid option -- '{arg}'")
+                return 1
+
+        if not username:
+            print("Usage: useradd [-m] [-s shell] username")
+            return 1
+
+        # Create user
+        success, msg = shell.um.create_user(
+            username=username,
+            password="",  # Empty password initially
+            shell=shell_path,
+            create_home=create_home
+        )
+
+        if success:
+            print(msg)
+            print(f"Set password with: passwd {username}")
+            return 0
+        else:
+            print(f"useradd: {msg}")
+            return 1
+
+
+class UserdelCommand(ShellCommand):
+    """Delete a user account."""
+
+    def __init__(self):
+        super().__init__("userdel", "Delete a user account")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.um:
+            print("userdel: user management not available")
+            return 1
+
+        # Check if running as root
+        if shell.auth and shell.auth.get_current_uid() != 0:
+            print("userdel: Permission denied (requires root)")
+            return 1
+
+        remove_home = False
+        username = None
+
+        for arg in args:
+            if arg == "-r":
+                remove_home = True
+            elif not arg.startswith("-"):
+                username = arg
+            else:
+                print(f"userdel: invalid option -- '{arg}'")
+                return 1
+
+        if not username:
+            print("Usage: userdel [-r] username")
+            return 1
+
+        success, msg = shell.um.delete_user(username, remove_home)
+
+        if success:
+            print(msg)
+            return 0
+        else:
+            print(f"userdel: {msg}")
+            return 1
+
+
+class PasswdCommand(ShellCommand):
+    """Change user password."""
+
+    def __init__(self):
+        super().__init__("passwd", "Change user password")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.um or not shell.auth:
+            print("passwd: user management not available")
+            return 1
+
+        # Determine which user to change password for
+        if args:
+            target_user = args[0]
+            # Only root can change other users' passwords
+            if shell.auth.get_current_uid() != 0:
+                print("passwd: Only root can change other users' passwords")
+                return 1
+        else:
+            target_user = shell.auth.get_current_user()
+
+        if not shell.um.user_exists(target_user):
+            print(f"passwd: user '{target_user}' does not exist")
+            return 1
+
+        # Get new password
+        import getpass
+        try:
+            new_pass = getpass.getpass(f"Enter new password for {target_user}: ")
+            confirm_pass = getpass.getpass("Retype new password: ")
+
+            if new_pass != confirm_pass:
+                print("passwd: passwords do not match")
+                return 1
+
+            success, msg = shell.um.change_password(target_user, new_pass)
+
+            if success:
+                print(f"passwd: password updated successfully")
+                return 0
+            else:
+                print(f"passwd: {msg}")
+                return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\npasswd: cancelled")
+            return 1
+
+
+class SuCommand(ShellCommand):
+    """Switch user."""
+
+    def __init__(self):
+        super().__init__("su", "Switch user")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.auth or not shell.um:
+            print("su: authentication not available")
+            return 1
+
+        # Default to root if no username given
+        target_user = args[0] if args else "root"
+
+        if not shell.um.user_exists(target_user):
+            print(f"su: user '{target_user}' does not exist")
+            return 1
+
+        # Get password
+        import getpass
+        try:
+            password = getpass.getpass(f"Password: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+
+        # Attempt authentication
+        success, result = shell.auth.switch_user(target_user, password)
+
+        if success:
+            # Update environment
+            user = shell.um.get_user(target_user)
+            if user:
+                shell.environment["USER"] = target_user
+                shell.environment["HOME"] = user.home_dir
+                # Change to user's home directory
+                shell.fs.change_directory(user.home_dir)
+            print(f"Switched to user '{target_user}'")
+            return 0
+        else:
+            print(f"su: Authentication failure")
+            return 1
+
+
+class LoginCommand(ShellCommand):
+    """Login as a user."""
+
+    def __init__(self):
+        super().__init__("login", "Login as a user")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.auth or not shell.um:
+            print("login: authentication not available")
+            return 1
+
+        username = args[0] if args else None
+
+        if not username:
+            username = input("Username: ")
+
+        if not username:
+            print("login: no username specified")
+            return 1
+
+        if not shell.um.user_exists(username):
+            print(f"login: user '{username}' does not exist")
+            return 1
+
+        # Get password
+        import getpass
+        try:
+            password = getpass.getpass("Password: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 1
+
+        # Attempt login
+        success, result = shell.auth.login(username, password)
+
+        if success:
+            # Update environment
+            user = shell.um.get_user(username)
+            if user:
+                shell.environment["USER"] = username
+                shell.environment["HOME"] = user.home_dir
+                # Change to user's home directory
+                shell.fs.change_directory(user.home_dir)
+
+            # Show login info
+            import time
+            print(f"\nWelcome to PureOS!")
+            if user and user.last_login:
+                print(f"Last login: {time.ctime(user.last_login)}")
+            print()
+            return 0
+        else:
+            print(f"login: {result}")
+            return 1
+
+
+class LogoutCommand(ShellCommand):
+    """Logout current user."""
+
+    def __init__(self):
+        super().__init__("logout", "Logout current user")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.auth:
+            print("logout: not logged in")
+            return 1
+
+        current_user = shell.auth.get_current_user()
+        shell.auth.logout()
+
+        print(f"User '{current_user}' logged out")
+
+        # If we were root, stop the shell
+        # Otherwise, we might want to switch back to a login prompt
+        # For now, just return success
+        return 0
+
+
+class WhoCommand(ShellCommand):
+    """Show who is logged in."""
+
+    def __init__(self):
+        super().__init__("who", "Show who is logged in")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.auth:
+            print("who: authentication not available")
+            return 1
+
+        sessions = shell.auth.list_active_sessions()
+
+        if not sessions:
+            print("No active sessions")
+            return 0
+
+        print(f"{'USERNAME':<15} {'UID':<8} {'LOGIN TIME':<25}")
+        print("-" * 50)
+
+        import time
+        for session in sessions:
+            login_time = time.ctime(session["login_time"])
+            print(f"{session['username']:<15} {session['uid']:<8} {login_time:<25}")
+
+        return 0
+
+
+class IdCommand(ShellCommand):
+    """Print user identity."""
+
+    def __init__(self):
+        super().__init__("id", "Print user identity")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not shell.auth or not shell.um:
+            print("id: authentication not available")
+            return 1
+
+        # Determine which user to show
+        if args:
+            username = args[0]
+            user = shell.um.get_user(username)
+            if not user:
+                print(f"id: '{username}': no such user")
+                return 1
+        else:
+            username = shell.auth.get_current_user()
+            user = shell.um.get_user(username)
+
+        if not user:
+            print("id: cannot determine user")
+            return 1
+
+        # Get user's groups
+        groups = shell.um.get_user_groups(username)
+        group_ids = []
+        for group_name in groups:
+            group = shell.um.get_group(group_name)
+            if group:
+                group_ids.append(f"{group_name}({group.gid})")
+
+        print(f"uid={user.uid}({user.username}) gid={user.gid}({user.username})")
+        if group_ids:
+            print(f"groups={','.join(group_ids)}")
+
+        return 0
