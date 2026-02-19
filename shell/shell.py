@@ -230,6 +230,22 @@ class Shell:
 
         return self.last_exit_code
     
+    def get_prompt(self) -> str:
+        """Generate shell prompt based on current user."""
+        if self.auth and self.auth.is_authenticated():
+            username = self.auth.get_current_user()
+        else:
+            username = self.environment.get('USER', 'user')
+        
+        cwd = self.fs.get_current_directory()
+        # Replace home directory with ~
+        if self.auth:
+            home = self.auth.get_user_home()
+            if cwd.startswith(home):
+                cwd = "~" + cwd[len(home):]
+        
+        return f"{username}@pureos:{cwd}$ "
+    
     def run(self) -> None:
         """Run the shell interactively."""
         self.running = True
@@ -241,7 +257,7 @@ class Shell:
 
         while self.running:
             try:
-                prompt = f"{self.environment.get('USER', 'user')}@pureos:{self.fs.get_current_directory()}$ "
+                prompt = self.get_prompt()
                 line = input(prompt)
                 self.execute(line)
             except KeyboardInterrupt:
