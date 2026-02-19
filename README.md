@@ -48,10 +48,17 @@ An operating system written entirely in Python using only the standard library. 
 - `env` - Environment variables
 - `export` - Set environment variables
 
+#### Text Editing
+- `nano <file>` - Edit files with built-in text editor
+
 #### System Control
 - `reboot` - Restart system
 - `shutdown` - Power off
 - `exit` - Exit shell
+
+#### Persistence
+- `save` - Manually save system state
+- `load` - Load previously saved state
 
 ## Quick Start
 
