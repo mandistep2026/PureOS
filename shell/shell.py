@@ -30,9 +30,11 @@ class ShellCommand:
 class Shell:
     """Main shell interpreter."""
     
-    def __init__(self, kernel, filesystem):
+    def __init__(self, kernel, filesystem, authenticator=None, user_manager=None):
         self.kernel = kernel
         self.fs = filesystem
+        self.auth = authenticator
+        self.um = user_manager
         self.commands: Dict[str, ShellCommand] = {}
         self.running = False
         self.last_exit_code = 0
