@@ -320,6 +320,26 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
         
+        # Test 6: Package manager
+        print("Test 6: Package manager...")
+        try:
+            from core.package import PackageManager
+            pm = PackageManager()
+            packages = pm.list_available()
+            assert len(packages) > 0
+            assert pm.is_installed("vim") == False
+            success, msg = pm.install("vim")
+            assert success
+            assert pm.is_installed("vim") == True
+            success, msg = pm.remove("vim")
+            assert success
+            assert pm.is_installed("vim") == False
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+        
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
