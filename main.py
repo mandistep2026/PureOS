@@ -414,6 +414,28 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
         
+        # Test 11: File metadata commands
+        print("Test 11: File metadata commands...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("touch /tmp/meta.txt") == 0
+            assert shell.execute("chmod rwxr----- /tmp/meta.txt") == 0
+            inode = fs.get_inode("/tmp/meta.txt")
+            assert inode is not None
+            assert inode.permissions == "rwxr-----"
+            assert shell.execute("chown alice:staff /tmp/meta.txt") == 0
+            inode = fs.get_inode("/tmp/meta.txt")
+            assert inode.owner == "alice"
+            assert inode.group == "staff"
+            assert shell.execute("chmod 755 /tmp/meta.txt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -434,6 +456,8 @@ def show_help():
     print("  touch     Create empty file")
     print("  cp        Copy file")
     print("  mv        Move/rename file")
+    print("  chmod     Change file permissions")
+    print("  chown     Change file owner/group")
     print("  ps        List processes")
     print("  kill      Terminate process")
     print("  uname     System information")
