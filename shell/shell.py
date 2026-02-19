@@ -6,6 +6,7 @@ Command interpreter for the operating system.
 import sys
 import shlex
 import time
+from io import StringIO
 from typing import List, Dict, Callable, Optional, Tuple
 from pathlib import Path
 
