@@ -336,16 +336,25 @@ PureOS is designed to be simple and educational. Contributions should maintain:
 
 ## Future Enhancements
 
-- [x] Persistent storage (JSON or pickle) ✓ **Implemented in v1.1**
-- [x] Text editor (vim-like) ✓ **Implemented in v1.1**
-- [x] Command history ✓ **Implemented in v1.1**
-- [x] User authentication system ✓ **Implemented in v1.2**
-- [x] Scripting language ✓ **Implemented in v1.2**
-- [x] Multi-user support ✓ **Implemented in v1.2**
-- [ ] Network stack simulation
-- [ ] Package manager
+### Completed Features ✓
+- [x] Persistent storage (JSON or pickle) ✓ **v1.1**
+- [x] Text editor (vim-like) ✓ **v1.1**
+- [x] Command history ✓ **v1.1**
+- [x] User authentication system ✓ **v1.2**
+- [x] Scripting language ✓ **v1.2**
+- [x] Multi-user support ✓ **v1.2**
+- [x] Tab completion ✓ **v1.3**
+- [x] Line editing with key bindings ✓ **v1.3**
+- [x] Command aliases ✓ **v1.3**
+- [x] Prompt customization ✓ **v1.3**
+- [x] Wildcards/globbing ✓ **v1.3**
+
+### Planned Features
+- [ ] Package manager - Install/remove software packages
+- [ ] Network stack simulation - Virtual networking
+- [ ] Job control - Background processes (`&`, `fg`, `bg`)
 - [ ] Graphical interface (using curses)
-- [ ] Tab completion in shell
+- [ ] More utilities: `find`, `tar`, `gzip`
 
 ## About
 
