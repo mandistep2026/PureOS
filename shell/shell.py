@@ -835,18 +835,35 @@ class ChmodCommand(ShellCommand):
     def __init__(self):
         super().__init__("chmod", "Change file permissions")
 
+    def _parse_permissions(self, mode: str) -> Optional[str]:
+        """Convert chmod mode into rwxrwxrwx-style permissions."""
+        if len(mode) == 9 and all(ch in "rwx-" for ch in mode):
+            return mode
+
+        if len(mode) != 3 or any(ch not in "01234567" for ch in mode):
+            return None
+
+        symbolic = []
+        for digit in mode:
+            value = int(digit)
+            symbolic.append("r" if value & 4 else "-")
+            symbolic.append("w" if value & 2 else "-")
+            symbolic.append("x" if value & 1 else "-")
+
+        return "".join(symbolic)
+
     def execute(self, args: List[str], shell) -> int:
         if len(args) < 2:
             print("chmod: missing operand")
             print("Usage: chmod <permissions> <file> [file ...]")
             return 1
 
-        permissions = args[0]
+        permissions = self._parse_permissions(args[0])
         paths = args[1:]
 
-        if len(permissions) != 9 or any(ch not in "rwx-" for ch in permissions):
-            print(f"chmod: invalid mode: '{permissions}'")
-            print("Only symbolic modes like rwxr-xr-x are supported")
+        if permissions is None:
+            print(f"chmod: invalid mode: '{args[0]}'")
+            print("Use symbolic mode (rwxr-xr-x) or octal mode (755)")
             return 1
 
         for path in paths:
