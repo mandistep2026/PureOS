@@ -148,6 +148,8 @@ class Shell:
         self.register_command(WhichCommand())
         self.register_command(TypeCommand())
         self.register_command(SleepCommand())
+        self.register_command(SaveCommand())
+        self.register_command(LoadCommand())
         
         # Aliases
         self.register_command(AliasCommand())
