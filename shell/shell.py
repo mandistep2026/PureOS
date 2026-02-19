@@ -163,11 +163,12 @@ class Shell:
     def run(self) -> None:
         """Run the shell interactively."""
         self.running = True
-        
+
         print("PureOS Shell v1.0")
         print("Type 'help' for available commands")
+        print("Use '!!' to repeat last command, '!n' to run command #n")
         print()
-        
+
         while self.running:
             try:
                 prompt = f"{self.environment.get('USER', 'user')}@pureos:{self.fs.get_current_directory()}$ "
