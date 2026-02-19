@@ -31,6 +31,7 @@ An operating system written entirely in Python using only the standard library. 
 - `touch` - Create empty files
 - `cp` - Copy files
 - `mv` - Move/rename files
+- `find` - Search for files and directories (supports `-name` and `-type`)
 - `chmod` - Change file permissions (symbolic mode, e.g. `rwxr-xr-x`)
 - `chown` - Change file owner/group (format: `owner[:group]`)
 
