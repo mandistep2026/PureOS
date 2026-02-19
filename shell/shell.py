@@ -47,6 +47,7 @@ class Shell:
             "PATH": "/bin",
             "HOME": "/root",
             "USER": "root",
+            "HOSTNAME": "pureos",
             "SHELL": "/bin/sh",
             "TERM": "xterm",
             "PS1": "\\u@\\h:\\w\\$ ",
