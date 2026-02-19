@@ -409,7 +409,7 @@ class NetworkManager:
 
     def get_proc_net_dev(self) -> str:
         lines = ["Inter-|   Receive                                                |  Transmit"]
-        lines.append(" face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed"]
+        lines.append(" face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed")
         for name, iface in self.interfaces.items():
             rx = iface.rx_bytes
             tx = iface.tx_bytes
