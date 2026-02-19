@@ -715,10 +715,10 @@ class ShutdownCommand(ShellCommand):
 
 class ExitCommand(ShellCommand):
     """Exit the shell."""
-    
+
     def __init__(self):
         super().__init__("exit", "Exit the shell")
-    
+
     def execute(self, args: List[str], shell) -> int:
         code = 0
         if args:
@@ -726,6 +726,189 @@ class ExitCommand(ShellCommand):
                 code = int(args[0])
             except ValueError:
                 pass
-        
+
         shell.running = False
         return code
+
+
+class NanoCommand(ShellCommand):
+    """Text editor."""
+
+    def __init__(self):
+        super().__init__("nano", "Edit files")
+
+    def execute(self, args: List[str], shell) -> int:
+        filename = args[0] if args else None
+
+        try:
+            from bin.editor import edit_file
+            return edit_file(shell.fs, filename)
+        except ImportError:
+            print("nano: editor module not available")
+            return 1
+        except Exception as e:
+            print(f"nano: {e}")
+            return 1
+
+
+class GrepCommand(ShellCommand):
+    """Search for patterns in files."""
+
+    def __init__(self):
+        super().__init__("grep", "Search for patterns in files")
+
+    def execute(self, args: List[str], shell) -> int:
+        if len(args) < 2:
+            print("Usage: grep <pattern> <file>")
+            return 1
+
+        pattern = args[0]
+        filename = args[1]
+
+        content = shell.fs.read_file(filename)
+        if content is None:
+            print(f"grep: {filename}: No such file or directory")
+            return 1
+
+        lines = content.decode('utf-8', errors='replace').split('\n')
+        found = False
+
+        for i, line in enumerate(lines, 1):
+            if pattern in line:
+                print(f"{filename}:{i}:{line}")
+                found = True
+
+        return 0 if found else 1
+
+
+class HeadCommand(ShellCommand):
+    """Output the first part of files."""
+
+    def __init__(self):
+        super().__init__("head", "Output the first part of files")
+
+    def execute(self, args: List[str], shell) -> int:
+        lines_count = 10
+        filename = None
+
+        # Parse arguments
+        for i, arg in enumerate(args):
+            if arg.startswith('-n'):
+                if len(arg) > 2:
+                    lines_count = int(arg[2:])
+                elif i + 1 < len(args):
+                    lines_count = int(args[i + 1])
+            elif not arg.startswith('-'):
+                filename = arg
+
+        if not filename:
+            print("head: missing file operand")
+            return 1
+
+        content = shell.fs.read_file(filename)
+        if content is None:
+            print(f"head: cannot open '{filename}' for reading: No such file or directory")
+            return 1
+
+        lines = content.decode('utf-8', errors='replace').split('\n')
+        for line in lines[:lines_count]:
+            print(line)
+
+        return 0
+
+
+class TailCommand(ShellCommand):
+    """Output the last part of files."""
+
+    def __init__(self):
+        super().__init__("tail", "Output the last part of files")
+
+    def execute(self, args: List[str], shell) -> int:
+        lines_count = 10
+        filename = None
+
+        # Parse arguments
+        for i, arg in enumerate(args):
+            if arg.startswith('-n'):
+                if len(arg) > 2:
+                    lines_count = int(arg[2:])
+                elif i + 1 < len(args):
+                    lines_count = int(args[i + 1])
+            elif not arg.startswith('-'):
+                filename = arg
+
+        if not filename:
+            print("tail: missing file operand")
+            return 1
+
+        content = shell.fs.read_file(filename)
+        if content is None:
+            print(f"tail: cannot open '{filename}' for reading: No such file or directory")
+            return 1
+
+        lines = content.decode('utf-8', errors='replace').split('\n')
+        start = max(0, len(lines) - lines_count)
+        for line in lines[start:]:
+            print(line)
+
+        return 0
+
+
+class SaveCommand(ShellCommand):
+    """Save system state to disk."""
+
+    def __init__(self):
+        super().__init__("save", "Save system state")
+
+    def execute(self, args: List[str], shell) -> int:
+        try:
+            from core.persistence import PersistenceManager
+            pm = PersistenceManager()
+            if pm.save_state(shell.fs, shell, shell.kernel):
+                print("System state saved successfully")
+                return 0
+            else:
+                print("Failed to save system state")
+                return 1
+        except Exception as e:
+            print(f"save: {e}")
+            return 1
+
+
+class LoadCommand(ShellCommand):
+    """Load system state from disk."""
+
+    def __init__(self):
+        super().__init__("load", "Load system state")
+
+    def execute(self, args: List[str], shell) -> int:
+        try:
+            from core.persistence import PersistenceManager
+            pm = PersistenceManager()
+
+            if not pm.state_exists():
+                print("No saved state found")
+                return 1
+
+            info = pm.get_state_info()
+            if info:
+                print(f"Found saved state:")
+                print(f"  Files: {info['files']}")
+                print(f"  Directories: {info['directories']}")
+                print(f"  History: {info['history_count']} commands")
+                print(f"  Directory: {info['current_directory']}")
+
+            print("\nLoad this state? (y/n): ", end='')
+            if input().lower() != 'y':
+                print("Load cancelled")
+                return 0
+
+            if pm.load_state(shell.fs, shell, shell.kernel):
+                print("System state loaded successfully")
+                return 0
+            else:
+                print("Failed to load system state")
+                return 1
+        except Exception as e:
+            print(f"load: {e}")
+            return 1
