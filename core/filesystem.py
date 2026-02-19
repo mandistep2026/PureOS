@@ -91,28 +91,30 @@ class FileSystem:
     def _add_to_parent(self, path: str, name: str) -> bool:
         """Add entry to parent directory."""
         parent_path = self._get_parent(path)
-        if parent_path not in self.inodes:
+        if parent_path is None or parent_path not in self.inodes:
             return False
         
         parent = self.inodes[parent_path]
         if parent.type != FileType.DIRECTORY:
             return False
         
-        parent.content[name] = path
-        parent.modified = time.time()
-        return True
+        if isinstance(parent.content, dict):
+            parent.content[name] = path
+            parent.modified = time.time()
+            return True
+        return False
     
     def _remove_from_parent(self, path: str, name: str) -> bool:
         """Remove entry from parent directory."""
         parent_path = self._get_parent(path)
-        if parent_path not in self.inodes:
+        if parent_path is None or parent_path not in self.inodes:
             return False
         
         parent = self.inodes[parent_path]
         if parent.type != FileType.DIRECTORY:
             return False
         
-        if name in parent.content:
+        if isinstance(parent.content, dict) and name in parent.content:
             del parent.content[name]
             parent.modified = time.time()
             return True
@@ -126,6 +128,8 @@ class FileSystem:
             return False
         
         parent_path = self._get_parent(path)
+        if parent_path is None:
+            return False
         if parent_path not in self.inodes:
             if not parents:
                 return False
@@ -217,7 +221,10 @@ class FileSystem:
         if inode.type != FileType.REGULAR:
             return None
         
-        return inode.content
+        content = inode.content
+        if isinstance(content, bytes):
+            return content
+        return None
     
     def delete_file(self, path: str) -> bool:
         """Delete a file."""
@@ -235,7 +242,7 @@ class FileSystem:
         del self.inodes[path]
         return True
     
-    def list_directory(self, path: str = None) -> Optional[List[Inode]]:
+    def list_directory(self, path: Optional[str] = None) -> Optional[List[Inode]]:
         """List contents of a directory."""
         if path is None:
             path = self.current_directory
@@ -249,7 +256,10 @@ class FileSystem:
         if inode.type != FileType.DIRECTORY:
             return None
         
-        return [self.inodes[p] for p in inode.content.values() if p in self.inodes]
+        dir_content = inode.content
+        if isinstance(dir_content, dict):
+            return [self.inodes[p] for p in dir_content.values() if p in self.inodes]
+        return []
     
     def change_directory(self, path: str) -> bool:
         """Change current directory."""
@@ -322,7 +332,7 @@ class FileSystem:
         self.inodes[path].modified = time.time()
         return True
     
-    def chown(self, path: str, owner: str, group: str = None) -> bool:
+    def chown(self, path: str, owner: str, group: Optional[str] = None) -> bool:
         """Change file owner and group."""
         path = self._normalize_path(path)
         if path not in self.inodes:
@@ -347,12 +357,18 @@ class FileSystem:
         """Export filesystem to JSON."""
         data = {}
         for path, inode in self.inodes.items():
+            if inode.type == FileType.DIRECTORY and isinstance(inode.content, dict):
+                content_data: Union[Dict[str, str], str] = inode.content
+            elif isinstance(inode.content, bytes):
+                content_data = inode.content.decode('utf-8', errors='replace')
+            else:
+                content_data = str(inode.content)
+            
             data[path] = {
                 "name": inode.name,
                 "type": inode.type.value,
                 "parent": inode.parent,
-                "content": inode.content if inode.type == FileType.DIRECTORY 
-                          else inode.content.decode('utf-8', errors='replace'),
+                "content": content_data,
                 "created": inode.created,
                 "modified": inode.modified,
                 "size": inode.size,
