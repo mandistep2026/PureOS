@@ -132,26 +132,112 @@ class Shell:
         line = line.strip()
         if not line:
             return "", []
-        
+
         # Handle aliases
         for alias, expansion in self.aliases.items():
             if line.startswith(alias + " ") or line == alias:
                 line = expansion + line[len(alias):]
                 break
-        
+
         # Expand environment variables
         for key, value in self.environment.items():
             line = line.replace(f"${key}", value)
-        
+
         try:
             parts = shlex.split(line)
         except ValueError:
             parts = line.split()
-        
+
         if not parts:
             return "", []
-        
-        return parts[0], parts[1:]
+
+        # Expand wildcards in arguments (not command name)
+        expanded_parts = [parts[0]]  # Keep command name as is
+        for arg in parts[1:]:
+            if '*' in arg or '?' in arg or '[' in arg:
+                matches = self._expand_wildcard(arg)
+                if matches:
+                    expanded_parts.extend(matches)
+                else:
+                    # No matches, keep original
+                    expanded_parts.append(arg)
+            else:
+                expanded_parts.append(arg)
+
+        return expanded_parts[0], expanded_parts[1:]
+
+    def _expand_wildcard(self, pattern: str) -> List[str]:
+        """Expand wildcard pattern to matching files."""
+        import fnmatch
+
+        # Determine directory and file pattern
+        if '/' in pattern:
+            # Pattern with path
+            if pattern.startswith('/'):
+                # Absolute path
+                dir_part = pattern.rsplit('/', 1)[0]
+                file_pattern = pattern.rsplit('/', 1)[1]
+            else:
+                # Relative path
+                current_dir = self.fs.get_current_directory()
+                if '/' in pattern:
+                    dir_part = pattern.rsplit('/', 1)[0]
+                    file_pattern = pattern.rsplit('/', 1)[1]
+                    if not dir_part.startswith('/'):
+                        dir_part = current_dir + '/' + dir_part
+                else:
+                    dir_part = current_dir
+                    file_pattern = pattern
+        else:
+            # Pattern in current directory
+            dir_part = self.fs.get_current_directory()
+            file_pattern = pattern
+
+        # Normalize directory path
+        dir_part = self._normalize_path(dir_part)
+
+        # Get directory contents
+        try:
+            entries = self.fs.list_directory(dir_part)
+        except:
+            return []
+
+        if not entries:
+            return []
+
+        # Match files against pattern
+        matches = []
+        for entry in entries:
+            if fnmatch.fnmatch(entry.name, file_pattern):
+                # Build full path
+                if dir_part == '/':
+                    full_path = '/' + entry.name
+                else:
+                    full_path = dir_part + '/' + entry.name
+                matches.append(full_path)
+
+        return sorted(matches)
+
+    def _normalize_path(self, path: str) -> str:
+        """Normalize a path."""
+        # Remove double slashes
+        while '//' in path:
+            path = path.replace('//', '/')
+
+        # Handle . and ..
+        parts = path.split('/')
+        result = []
+        for part in parts:
+            if part == '' or part == '.':
+                continue
+            elif part == '..':
+                if result and result[-1] != '':
+                    result.pop()
+            else:
+                result.append(part)
+
+        normalized = '/' + '/'.join(result)
+        return normalized if normalized != '' else '/'
     
     def execute(self, line: str, save_to_history: bool = True) -> int:
         """Execute a command line."""
