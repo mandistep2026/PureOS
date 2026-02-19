@@ -105,7 +105,7 @@ python main.py --version
 ## New Features in v1.1
 
 ### Persistent Storage
-PureOS now automatically saves your filesystem state, command history, and environment variables to `~/.pureos/state.json`. On startup, you'll be prompted to restore your previous session.
+PureOS now automatically saves your filesystem state, command history, environment variables, and shell aliases to `~/.pureos/state.json`. On startup, you'll be prompted to restore your previous session.
 
 ### Command History
 - Press `!!` to repeat the last command
