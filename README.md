@@ -87,31 +87,64 @@ python main.py --help
 python main.py --version
 ```
 
+## New Features in v1.1
+
+### Persistent Storage
+PureOS now automatically saves your filesystem state, command history, and environment variables to `~/.pureos/state.json`. On startup, you'll be prompted to restore your previous session.
+
+### Command History
+- Press `!!` to repeat the last command
+- Press `!n` to execute the nth command from history
+- Use `history` command to view all previous commands
+
+### Text Editor
+Built-in nano-like editor for creating and editing files:
+```bash
+nano filename.txt
+```
+Editor controls:
+- `Ctrl+S` - Save file
+- `Ctrl+Q` - Quit editor
+- `Ctrl+N` - New line
+- `Ctrl+D` - Delete line
+- Arrow keys - Navigate
+
 ## Example Session
 
 ```
 $ python main.py
 Initializing PureOS...
-  [1/3] Starting kernel...
-  [2/3] Mounting filesystem...
-  [3/3] Loading shell...
+  [1/4] Starting kernel...
+  [2/4] Mounting filesystem...
+  [3/4] Loading shell...
+  [4/4] Checking for saved state...
+
+  Found saved state:
+    Files: 5
+    Directories: 3
+    History: 12 commands
+    Working directory: /home/user
+
+  Load saved state? (y/n): y
+  State loaded successfully!
 
 PureOS initialized successfully!
 
 PureOS Shell v1.0
 Type 'help' for available commands
+Use '!!' to repeat last command, '!n' to run command #n
 
-root@pureos:/$ pwd
-/
-root@pureos:/$ ls
+root@pureos:/home/user$ pwd
+/home/user
+root@pureos:/home/user$ ls
 bin/  dev/  etc/  home/  proc/  root/  tmp/  var/
-root@pureos:/$ cd home
-root@pureos:/home$ mkdir test
-root@pureos:/home$ cd test
-root@pureos:/home/test$ echo "Hello, PureOS!" > hello.txt
-root@pureos:/home/test$ cat hello.txt
+root@pureos:/home/user$ cd home
+root@pureos:/home/user$ mkdir test
+root@pureos:/home/user$ cd test
+root@pureos:/home/user/test$ echo "Hello, PureOS!" > hello.txt
+root@pureos:/home/user/test$ cat hello.txt
 Hello, PureOS!
-root@pureos:/home/test$ ls -l
+root@pureos:/home/user/test$ ls -l
 total 1
 drwxr-xr-x 1 root root        0 Feb 19 14:33 .
 drwxr-xr-x 1 root root        0 Feb 19 14:33 ..
