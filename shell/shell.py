@@ -6,6 +6,7 @@ Command interpreter for the operating system.
 import sys
 import shlex
 import time
+import fnmatch
 from io import StringIO
 from typing import List, Dict, Callable, Optional, Tuple
 from pathlib import Path
@@ -109,6 +110,7 @@ class Shell:
         self.register_command(HeadCommand())
         self.register_command(TailCommand())
         self.register_command(WcCommand())
+        self.register_command(FindCommand())
         
         # System info
         self.register_command(PsCommand())
@@ -1026,7 +1028,7 @@ class HelpCommand(ShellCommand):
             print("=" * 50)
             
             categories = {
-                "File Operations": ["ls", "cd", "pwd", "cat", "mkdir", "rmdir", "rm", "touch", "cp", "mv"],
+                "File Operations": ["ls", "cd", "pwd", "cat", "mkdir", "rmdir", "rm", "touch", "cp", "mv", "find"],
                 "System Info": ["ps", "kill", "uname", "free", "df", "uptime"],
                 "Utilities": ["echo", "help", "clear", "date", "whoami", "env", "export", "history", "which", "type"],
                 "System": ["reboot", "shutdown", "exit"],
@@ -1531,6 +1533,81 @@ class WcCommand(ShellCommand):
                 output_parts.append(str(totals['bytes']))
             output_parts.append('total')
             print(' '.join(output_parts))
+
+        return 0
+
+
+class FindCommand(ShellCommand):
+    """Search for files and directories."""
+
+    def __init__(self):
+        super().__init__("find", "Search for files and directories")
+
+    def execute(self, args: List[str], shell) -> int:
+        start_path = "."
+        name_pattern = None
+        type_filter = None
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-name":
+                if i + 1 >= len(args):
+                    print("find: missing argument to '-name'")
+                    return 1
+                name_pattern = args[i + 1]
+                i += 2
+            elif arg == "-type":
+                if i + 1 >= len(args):
+                    print("find: missing argument to '-type'")
+                    return 1
+                type_filter = args[i + 1]
+                if type_filter not in ("f", "d"):
+                    print(f"find: unsupported type '{type_filter}' (use 'f' or 'd')")
+                    return 1
+                i += 2
+            elif arg.startswith("-"):
+                print(f"find: unknown option '{arg}'")
+                return 1
+            else:
+                if start_path != ".":
+                    print(f"find: unexpected argument '{arg}'")
+                    return 1
+                start_path = arg
+                i += 1
+
+        root = shell.fs._normalize_path(start_path)
+        if not shell.fs.exists(root):
+            print(f"find: '{start_path}': No such file or directory")
+            return 1
+
+        matches = []
+        pending = [root]
+
+        while pending:
+            current_path = pending.pop()
+            inode = shell.fs.get_inode(current_path)
+            if inode is None:
+                continue
+
+            is_match = True
+            if name_pattern and not fnmatch.fnmatch(inode.name, name_pattern):
+                is_match = False
+
+            if type_filter == "f" and inode.type.value != "regular":
+                is_match = False
+            elif type_filter == "d" and inode.type.value != "directory":
+                is_match = False
+
+            if is_match:
+                matches.append(current_path)
+
+            if inode.type.value == "directory" and isinstance(inode.content, dict):
+                for child_name in sorted(inode.content.keys(), reverse=True):
+                    pending.append(inode.content[child_name])
+
+        for path in sorted(matches):
+            print(path)
 
         return 0
 

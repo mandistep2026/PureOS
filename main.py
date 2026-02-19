@@ -461,6 +461,26 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 13: Find command
+        print("Test 13: Find command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("mkdir -p /tmp/find_demo/sub") == 0
+            assert shell.execute("touch /tmp/find_demo/readme.txt") == 0
+            assert shell.execute("touch /tmp/find_demo/sub/notes.log") == 0
+            assert shell.execute("find /tmp/find_demo") == 0
+            assert shell.execute("find /tmp/find_demo -name '*.txt'") == 0
+            assert shell.execute("find /tmp/find_demo -type d") == 0
+            assert shell.execute("find /tmp/find_demo -type f") == 0
+            assert shell.execute("find /tmp/find_demo -type x") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -481,6 +501,7 @@ def show_help():
     print("  touch     Create empty file")
     print("  cp        Copy file")
     print("  mv        Move/rename file")
+    print("  find      Search for files and directories")
     print("  chmod     Change file permissions")
     print("  chown     Change file owner/group")
     print("  ps        List processes")
