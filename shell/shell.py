@@ -140,10 +140,13 @@ class Shell:
         self.register_command(HelpCommand())
         self.register_command(ClearCommand())
         self.register_command(DateCommand())
+        self.register_command(UptimeCommand())
         self.register_command(WhoamiCommand())
         self.register_command(EnvCommand())
         self.register_command(ExportCommand())
         self.register_command(HistoryCommand())
+        self.register_command(WhichCommand())
+        self.register_command(TypeCommand())
         self.register_command(SleepCommand())
         
         # Aliases
@@ -948,8 +951,8 @@ class HelpCommand(ShellCommand):
             
             categories = {
                 "File Operations": ["ls", "cd", "pwd", "cat", "mkdir", "rmdir", "rm", "touch", "cp", "mv"],
-                "System Info": ["ps", "kill", "uname", "free", "df"],
-                "Utilities": ["echo", "help", "clear", "date", "whoami", "env", "export", "history"],
+                "System Info": ["ps", "kill", "uname", "free", "df", "uptime"],
+                "Utilities": ["echo", "help", "clear", "date", "whoami", "env", "export", "history", "which", "type"],
                 "System": ["reboot", "shutdown", "exit"],
             }
             
@@ -982,6 +985,32 @@ class DateCommand(ShellCommand):
     
     def execute(self, args: List[str], shell) -> int:
         print(time.strftime("%a %b %d %H:%M:%S %Z %Y"))
+        return 0
+
+
+class UptimeCommand(ShellCommand):
+    """Tell how long the system has been running."""
+
+    def __init__(self):
+        super().__init__("uptime", "Tell how long the system has been running")
+
+    def execute(self, args: List[str], shell) -> int:
+        uptime_seconds = shell.kernel.get_uptime()
+        total_seconds = int(uptime_seconds)
+
+        days, rem = divmod(total_seconds, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, seconds = divmod(rem, 60)
+
+        parts = []
+        if days:
+            parts.append(f"{days} day{'s' if days != 1 else ''}")
+        if hours or days:
+            parts.append(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        else:
+            parts.append(f"{minutes:02d}:{seconds:02d}")
+
+        print(f"up {', '.join(parts)}")
         return 0
 
 
@@ -1051,6 +1080,81 @@ class HistoryCommand(ShellCommand):
             print(f" {i+1:4d}  {cmd}")
 
         return 0
+
+
+class WhichCommand(ShellCommand):
+    """Locate a command."""
+
+    def __init__(self):
+        super().__init__("which", "Locate a command")
+
+    def _find_in_path(self, name: str, shell) -> Optional[str]:
+        if "/" in name:
+            if shell.fs.exists(name) and not shell.fs.is_directory(name):
+                return name
+            return None
+
+        path_env = shell.environment.get("PATH", "")
+        for base in [p for p in path_env.split(":") if p]:
+            candidate = base.rstrip("/") + "/" + name
+            if shell.fs.exists(candidate) and not shell.fs.is_directory(candidate):
+                return candidate
+        return None
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("which: usage: which <command> [...]")
+            return 1
+
+        status = 0
+        for name in args:
+            if name in shell.aliases:
+                print(f"alias {name}='{shell.aliases[name]}'")
+                continue
+
+            if name in shell.commands:
+                print(name)
+                continue
+
+            location = self._find_in_path(name, shell)
+            if location:
+                print(location)
+            else:
+                status = 1
+
+        return status
+
+
+class TypeCommand(ShellCommand):
+    """Describe command type."""
+
+    def __init__(self):
+        super().__init__("type", "Describe command type")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("type: usage: type <command> [...]")
+            return 1
+
+        which = WhichCommand()
+        status = 0
+        for name in args:
+            if name in shell.aliases:
+                print(f"{name} is an alias for {shell.aliases[name]}")
+                continue
+
+            if name in shell.commands:
+                print(f"{name} is a shell builtin")
+                continue
+
+            location = which._find_in_path(name, shell)
+            if location:
+                print(f"{name} is {location}")
+            else:
+                print(f"type: {name}: not found")
+                status = 1
+
+        return status
 
 
 class RebootCommand(ShellCommand):
