@@ -102,6 +102,8 @@ class Shell:
         self.register_command(TouchCommand())
         self.register_command(CpCommand())
         self.register_command(MvCommand())
+        self.register_command(ChmodCommand())
+        self.register_command(ChownCommand())
         self.register_command(NanoCommand())
         self.register_command(GrepCommand())
         self.register_command(HeadCommand())
@@ -790,6 +792,77 @@ class MvCommand(ShellCommand):
             return 1
         
         shell.fs.delete_file(src)
+        return 0
+
+
+class ChmodCommand(ShellCommand):
+    """Change file mode bits."""
+
+    def __init__(self):
+        super().__init__("chmod", "Change file permissions")
+
+    def execute(self, args: List[str], shell) -> int:
+        if len(args) < 2:
+            print("chmod: missing operand")
+            print("Usage: chmod <permissions> <file> [file ...]")
+            return 1
+
+        permissions = args[0]
+        paths = args[1:]
+
+        if len(permissions) != 9 or any(ch not in "rwx-" for ch in permissions):
+            print(f"chmod: invalid mode: '{permissions}'")
+            print("Only symbolic modes like rwxr-xr-x are supported")
+            return 1
+
+        for path in paths:
+            if not shell.fs.chmod(path, permissions):
+                print(f"chmod: cannot access '{path}': No such file or directory")
+                return 1
+
+        return 0
+
+
+class ChownCommand(ShellCommand):
+    """Change file owner and group."""
+
+    def __init__(self):
+        super().__init__("chown", "Change file owner and group")
+
+    def execute(self, args: List[str], shell) -> int:
+        if len(args) < 2:
+            print("chown: missing operand")
+            print("Usage: chown <owner>[:group] <file> [file ...]")
+            return 1
+
+        owner_spec = args[0]
+        paths = args[1:]
+
+        if ':' in owner_spec:
+            owner, group = owner_spec.split(':', 1)
+            if not owner and not group:
+                print(f"chown: invalid spec: '{owner_spec}'")
+                return 1
+            if not owner:
+                owner = None
+            if not group:
+                group = None
+        else:
+            owner, group = owner_spec, None
+
+        for path in paths:
+            inode = shell.fs.get_inode(path)
+            if inode is None:
+                print(f"chown: cannot access '{path}': No such file or directory")
+                return 1
+
+            new_owner = owner if owner is not None else inode.owner
+            new_group = group if group is not None else inode.group
+
+            if not shell.fs.chown(path, new_owner, new_group):
+                print(f"chown: cannot access '{path}': No such file or directory")
+                return 1
+
         return 0
 
 
