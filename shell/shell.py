@@ -86,6 +86,11 @@ class Shell:
         self.register_command(WhoCommand())
         self.register_command(IdCommand())
         
+        # Scripting
+        self.register_command(BashCommand())
+        self.register_command(SourceCommand())
+        self.register_command(TestCommand())
+        
         # Utilities
         self.register_command(EchoCommand())
         self.register_command(HelpCommand())
