@@ -61,6 +61,10 @@ class Shell:
         self.register_command(TouchCommand())
         self.register_command(CpCommand())
         self.register_command(MvCommand())
+        self.register_command(NanoCommand())
+        self.register_command(GrepCommand())
+        self.register_command(HeadCommand())
+        self.register_command(TailCommand())
         
         # System info
         self.register_command(PsCommand())
