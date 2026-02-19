@@ -410,9 +410,9 @@ When a background job completes, you'll see:
 - [x] Wildcards/globbing ✓ **v1.3**
 - [x] Job control - Background processes (`&`, `fg`, `bg`, `jobs`) ✓ **v1.4**
 - [x] Package manager - Install/remove software packages ✓ **v1.5**
+- [x] Network stack simulation - Virtual networking ✓ **v1.6**
 
 ### Planned Features
-- [ ] Network stack simulation - Virtual networking
 - [ ] Graphical interface (using curses)
 - [ ] More utilities: `find`, `tar`, `gzip`
 
