@@ -414,8 +414,33 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
         
-        # Test 11: File metadata commands
-        print("Test 11: File metadata commands...")
+        # Test 11: Alias persistence
+        print("Test 11: Alias persistence...")
+        try:
+            import tempfile
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.execute("alias gs='echo status'")
+            shell.execute("unalias ll")
+
+            with tempfile.TemporaryDirectory() as state_dir:
+                pm = PersistenceManager(state_dir=state_dir)
+                assert pm.save_state(fs, shell, kernel)
+
+                reloaded_fs = FileSystem()
+                reloaded_shell = Shell(kernel, reloaded_fs)
+                assert pm.load_state(reloaded_fs, reloaded_shell, kernel)
+                assert reloaded_shell.aliases.get("gs") == "echo status"
+                assert "ll" not in reloaded_shell.aliases
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 12: File metadata commands
+        print("Test 12: File metadata commands...")
         try:
             kernel = Kernel()
             fs = FileSystem()

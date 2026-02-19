@@ -46,6 +46,7 @@ class PersistenceManager:
                 "version": "1.0",
                 "filesystem": self._serialize_filesystem(filesystem),
                 "environment": shell.environment if shell else {},
+                "aliases": getattr(shell, 'aliases', {}) if shell else {},
                 "history": getattr(shell, 'history', []) if shell else [],
                 "current_directory": filesystem.get_current_directory() if filesystem else "/",
             }
@@ -83,6 +84,10 @@ class PersistenceManager:
             # Restore environment
             if shell and "environment" in state:
                 shell.environment.update(state["environment"])
+
+            # Restore aliases
+            if shell and "aliases" in state:
+                shell.aliases = state["aliases"]
             
             # Restore history
             if shell and "history" in state:
