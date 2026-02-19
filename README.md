@@ -222,17 +222,34 @@ PureOS is designed to be simple and educational. Contributions should maintain:
 - Comprehensive documentation
 - Backward compatibility
 
+## What's New in v1.2
+
+### Multi-User System
+- **Login system** with password authentication
+- **User management**: `useradd`, `userdel`, `passwd`
+- **User switching**: `su`, `login`, `logout`
+- **Permission system** with root/non-root users
+- **Default users**: `root` (password: empty) and `alice` (password: password123)
+
+### Shell Scripting Engine
+- **Script execution**: `bash script.sh`
+- **Variables**: Local and environment variables with expansion
+- **Control flow**: `if/then/else`, `for` loops, `while` loops
+- **Conditionals**: File tests (`-f`, `-d`, `-e`), string/numeric comparisons
+- **Functions**: Define and call shell functions
+- **Test command**: `[ expression ]` for conditions
+
 ## Future Enhancements
 
 - [x] Persistent storage (JSON or pickle) ✓ **Implemented in v1.1**
-- [x] Text editor (vim-like) ✓ **Implemented in v1.1** (nano-style editor)
+- [x] Text editor (vim-like) ✓ **Implemented in v1.1**
 - [x] Command history ✓ **Implemented in v1.1**
-- [ ] User authentication system
+- [x] User authentication system ✓ **Implemented in v1.2**
+- [x] Scripting language ✓ **Implemented in v1.2**
+- [x] Multi-user support ✓ **Implemented in v1.2**
 - [ ] Network stack simulation
 - [ ] Package manager
-- [ ] Scripting language
 - [ ] Graphical interface (using curses)
-- [ ] Multi-user support
 - [ ] Tab completion in shell
 
 ## About
