@@ -17,6 +17,7 @@ class ProcessState(Enum):
     READY = "ready"
     RUNNING = "running"
     WAITING = "waiting"
+    STOPPED = "stopped"
     TERMINATED = "terminated"
 
 
@@ -167,6 +168,33 @@ class Kernel:
             # Free memory
             self.memory_manager.free(pid)
             
+            return True
+    
+    def suspend_process(self, pid: int) -> bool:
+        """Suspend (stop) a running process."""
+        with self.process_table_lock:
+            if pid not in self.processes:
+                return False
+            
+            process = self.processes[pid]
+            if process.state not in (ProcessState.RUNNING, ProcessState.READY):
+                return False
+            
+            process.state = ProcessState.STOPPED
+            return True
+    
+    def resume_process(self, pid: int) -> bool:
+        """Resume a stopped process."""
+        with self.process_table_lock:
+            if pid not in self.processes:
+                return False
+            
+            process = self.processes[pid]
+            if process.state != ProcessState.STOPPED:
+                return False
+            
+            process.state = ProcessState.READY
+            self.scheduler.add_process(process)
             return True
     
     def get_process(self, pid: int) -> Optional[Process]:
