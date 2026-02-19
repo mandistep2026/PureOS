@@ -76,6 +76,16 @@ class Shell:
         self.register_command(FreeCommand())
         self.register_command(DfCommand())
         
+        # User management
+        self.register_command(UseraddCommand())
+        self.register_command(UserdelCommand())
+        self.register_command(PasswdCommand())
+        self.register_command(SuCommand())
+        self.register_command(LoginCommand())
+        self.register_command(LogoutCommand())
+        self.register_command(WhoCommand())
+        self.register_command(IdCommand())
+        
         # Utilities
         self.register_command(EchoCommand())
         self.register_command(HelpCommand())
