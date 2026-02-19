@@ -706,9 +706,10 @@ class RmCommand(ShellCommand):
                     if not force:
                         print(f"rm: cannot remove '{path}': Is a directory")
                     return 1
-                # TODO: Implement recursive deletion
-                print(f"rm: recursive deletion not yet implemented")
-                return 1
+                if not shell.fs.remove_tree(path):
+                    if not force:
+                        print(f"rm: cannot remove '{path}': No such file or directory")
+                    return 1
             else:
                 if not shell.fs.delete_file(path):
                     if not force:
@@ -1962,4 +1963,3 @@ class SleepCommand(ShellCommand):
         except ValueError:
             print(f"sleep: invalid time interval '{args[0]}'")
             return 1
-

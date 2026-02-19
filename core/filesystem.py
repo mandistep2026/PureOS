@@ -167,6 +167,27 @@ class FileSystem:
         self._remove_from_parent(path, name)
         del self.inodes[path]
         return True
+
+    def remove_tree(self, path: str) -> bool:
+        """Recursively remove a file or directory tree."""
+        path = self._normalize_path(path)
+
+        if path == "/" or path not in self.inodes:
+            return False
+
+        inode = self.inodes[path]
+
+        if inode.type == FileType.DIRECTORY:
+            entries = inode.content if isinstance(inode.content, dict) else {}
+            child_paths = list(entries.values())
+            for child_path in child_paths:
+                if not self.remove_tree(child_path):
+                    return False
+
+        name = os.path.basename(path) or "/"
+        self._remove_from_parent(path, name)
+        del self.inodes[path]
+        return True
     
     def create_file(self, path: str, content: bytes = b"") -> bool:
         """Create a regular file."""
