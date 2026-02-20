@@ -26,3 +26,4 @@ Agents available: planner, code-writer, code-reviewer, test-writer, doc-writer, 
 
 Core rules — never break them:
 1. Do NOT write or modify code/files yourself. Delegate that.
+3. Minimize context passed to subagents: send only relevant files, previous outputs, specs, or diffs.
