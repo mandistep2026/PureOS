@@ -427,9 +427,9 @@ class TestPingCommand(BaseTestCase):
         self.assertEqual(rc, 0, "ping -t 9999 8.8.8.8 should return 0.")
 
     def test_t_flag_with_near_zero_timeout_fails(self):
-        """ping -t 0 should fail (all packets exceed the threshold)."""
+        """ping -t 0 should fail: 0 is rejected as an invalid (non-positive) timeout."""
         rc = self._execute(["-t", "0", "8.8.8.8"])
-        self.assertEqual(rc, 1, "ping -t 0 8.8.8.8 should return 1 (all packets timed out).")
+        self.assertEqual(rc, 1, "ping -t 0 8.8.8.8 should return 1 (zero timeout is invalid).")
 
     def test_t_flag_invalid_value_returns_error(self):
         """ping -t with a non-numeric value should return exit code 1."""
