@@ -873,6 +873,11 @@ class Shell:
             err_buffer = StringIO()
             sys.stderr = err_buffer
 
+        # Support 2>&1 by sharing stdout buffer
+        if '2>&1' in line_cmd and output_buffer is not None:
+            err_buffer = output_buffer
+            sys.stderr = output_buffer
+
         try:
             if command_name in self.commands:
                 try:
