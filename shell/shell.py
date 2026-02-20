@@ -2259,15 +2259,14 @@ class UniqCommand(ShellCommand):
             return 1
 
         if not filenames:
-            print("uniq: missing file operand")
-            return 1
-
-        content = shell.fs.read_file(filenames[0])
-        if content is None:
-            print(f"uniq: {filenames[0]}: No such file or directory")
-            return 1
-
-        lines = content.decode('utf-8', errors='replace').splitlines()
+            # Read from stdin
+            lines = sys.stdin.read().splitlines()
+        else:
+            content = shell.fs.read_file(filenames[0])
+            if content is None:
+                print(f"uniq: {filenames[0]}: No such file or directory")
+                return 1
+            lines = content.decode('utf-8', errors='replace').splitlines()
         groups: List[Tuple[str, int]] = []
 
         for line in lines:
