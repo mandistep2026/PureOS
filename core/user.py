@@ -180,7 +180,7 @@ class UserManager:
             (success: bool, message: str)
         """
         # Validate username
-        if not username or not username.isalnum() or username[0].isdigit():
+        if not username or not re.match(r'^[a-zA-Z_][a-zA-Z0-9_-]*$', username):
             return False, "Invalid username (must be alphanumeric, not starting with digit)"
         
         if username in self.users:
