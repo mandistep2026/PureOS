@@ -1564,6 +1564,41 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+
+        # Test 61: dmesg filtering and line limiting
+        print("Test 61: dmesg filtering and line limiting...")
+        try:
+            import io
+            import contextlib
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+
+            from core.logging import LogLevel, LogFacility
+            shell.kernel.logger.set_log_level(LogLevel.DEBUG)
+            shell.kernel.logger.log(LogLevel.INFO, LogFacility.KERN, "kernel info message", "kernel", pid=0)
+            shell.kernel.logger.log(LogLevel.DEBUG, LogFacility.KERN, "kernel debug message", "kernel", pid=0)
+            shell.kernel.logger.log(LogLevel.INFO, LogFacility.USER, "user space message", "user", pid=1)
+
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                assert shell.execute("dmesg -l info") == 0
+                output = buf.getvalue()
+            assert "kernel info message" in output
+            assert "kernel debug message" not in output
+            assert "user space message" not in output
+
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                assert shell.execute("dmesg -n 1") == 0
+                output = buf.getvalue()
+            lines = [line for line in output.splitlines() if line.strip()]
+            assert len(lines) == 1
+
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         

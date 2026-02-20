@@ -412,7 +412,7 @@ When a background job completes, you'll see:
 ### 🚀 Major System Enhancements
 
 #### System Logging & Monitoring
-- **`dmesg`** — Display kernel ring buffer messages
+- **`dmesg`** — Display kernel ring buffer messages (`-l/--level`, `-n/--lines`, `-c/--clear`)
 - **`logger`** — Add entries to system log with priority and facility
 - **`journalctl`** — Query the system journal with filtering (`-n`, `-u`, `-p`, `-f`)
 - **SystemLogger** — Full syslog-compatible logging infrastructure
