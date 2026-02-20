@@ -237,9 +237,9 @@ class IpCommand(ShellCommand):
 
     def show_addresses(self, shell, args: List) -> int:
         if "show" in args or not args:
-            for iface in self.nm.list_interfaces():
+            for idx, iface in enumerate(self.nm.list_interfaces(), start=1):
                 state = "UP" if iface.state.value == "up" else "DOWN"
-                shell.print(f"{iface.index}: {iface.name} <{state},LOOPBACK,RUNNING,MULTICAST> mtu {iface.mtu} qdisc pfifo_fast state UNKNOWN mode DEFAULT")
+                shell.print(f"{idx}: {iface.name} <{state},LOOPBACK,RUNNING,MULTICAST> mtu {iface.mtu} qdisc pfifo_fast state UNKNOWN mode DEFAULT")
                 shell.print(f"    link/{'ether' if iface.name != 'loopback' else 'loopback'} {iface.mac_address} brd ff:ff:ff:ff:ff:ff")
                 shell.print(f"    inet {iface.ip_address}/{iface._netmask_to_prefix(iface.netmask)} brd {iface.get_broadcast()} scope global {iface.name}")
                 shell.print(f"    inet6 {self._generate_ipv6(iface.ip_address)} scope global")
