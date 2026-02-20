@@ -36,6 +36,20 @@ done
 
 echo ""
 
+# Awk + Sed demo
+echo "Creating data file for awk/sed demos..."
+echo "1 apple" > /tmp/fruit.txt
+echo "2 banana" >> /tmp/fruit.txt
+echo "3 cherry" >> /tmp/fruit.txt
+echo "4 date" >> /tmp/fruit.txt
+echo ""
+echo "Awk: show lines where first field > 2"
+awk '$1 > 2 { print $1, $2 }' /tmp/fruit.txt
+echo ""
+echo "Sed: replace a word and insert a header"
+sed -e '1i Fruit List:' -e 's/banana/blueberry/' /tmp/fruit.txt
+echo ""
+
 # While loop with counter
 echo "Counting from 1 to 3:"
 count=1
