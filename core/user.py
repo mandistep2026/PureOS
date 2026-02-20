@@ -254,7 +254,7 @@ class UserManager:
         
         # Delete user
         del self.users[username]
-        
+        self._refresh_etc_files()
         return True, f"User '{username}' deleted successfully"
     
     def change_password(self, username: str, new_password: str) -> Tuple[bool, str]:
