@@ -534,7 +534,8 @@ class Shell:
 
     def _parse_input_redirection(self, line: str) -> Tuple[str, Optional[str]]:
         """Parse stdin redirection (< file) from a command line.
-        Returns (cleaned_line, input_file_or_None).
+        Returns (cleaned_line_without_<_part, input_file_or_None).
+        Preserves any output redirection tokens in the returned line.
         """
         try:
             lexer = shlex.shlex(line, posix=True, punctuation_chars='<')
@@ -543,16 +544,24 @@ class Shell:
         except ValueError:
             return line, None
 
-        for i, token in enumerate(tokens):
-            if token == '<':
-                if i + 1 < len(tokens):
-                    input_file = tokens[i + 1]
-                    command = ' '.join(tokens[:i]).strip()
-                    return command, input_file
+        input_file = None
+        result_tokens: List[str] = []
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token == '<' and i + 1 < len(tokens):
+                input_file = tokens[i + 1]
+                i += 2  # skip '<' and the filename
+                continue
             elif token.startswith('<') and len(token) > 1:
                 input_file = token[1:]
-                command = ' '.join(tokens[:i]).strip()
-                return command, input_file
+                i += 1
+                continue
+            result_tokens.append(token)
+            i += 1
+
+        if input_file is not None:
+            return ' '.join(result_tokens).strip(), input_file
         return line, None
 
     def _execute_single(self, line: str, background: bool = False) -> int:
