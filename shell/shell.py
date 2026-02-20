@@ -261,15 +261,23 @@ class Shell:
             return "", []
 
         # Expand wildcards in arguments (not command name)
+        # Only expand if the pattern contains more than a bare '*' or '?'
+        # (bare '*' alone should not be expanded to avoid breaking expr, etc.)
+        _no_glob_cmds = {'expr', 'awk', 'sed', 'bc', 'printf', 'grep', 'find'}
         expanded_parts = [parts[0]]  # Keep command name as is
+        skip_glob = parts[0] in _no_glob_cmds
         for arg in parts[1:]:
-            if '*' in arg or '?' in arg or '[' in arg:
-                matches = self._expand_wildcard(arg)
-                if matches:
-                    expanded_parts.extend(matches)
-                else:
-                    # No matches, keep original
+            if not skip_glob and ('*' in arg or '?' in arg or '[' in arg):
+                # Don't expand pure operator symbols used in arithmetic/logic
+                if arg in ('*', '?', '+', '-', '/', '%', '**'):
                     expanded_parts.append(arg)
+                else:
+                    matches = self._expand_wildcard(arg)
+                    if matches:
+                        expanded_parts.extend(matches)
+                    else:
+                        # No matches, keep original
+                        expanded_parts.append(arg)
             else:
                 expanded_parts.append(arg)
 
@@ -4654,9 +4662,13 @@ class PrintfCommand(ShellCommand):
         fmt = args[0]
         fmt_args = args[1:]
 
-        # Handle escape sequences in format
-        fmt = fmt.replace('\\n', '\n').replace('\\t', '\t').replace('\\r', '\r') \
-                  .replace('\\\\', '\\').replace('\\0', '\0')
+        # Handle escape sequences in format (shlex already strips outer quotes,
+        # but \\n from single-quoted args arrives as literal \n two chars)
+        def unescape(s: str) -> str:
+            return s.replace('\\n', '\n').replace('\\t', '\t') \
+                    .replace('\\r', '\r').replace('\\\\', '\\').replace('\\0', '\0')
+
+        fmt = unescape(fmt)
 
         if not fmt_args:
             sys.stdout.write(fmt)
