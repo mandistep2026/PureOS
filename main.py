@@ -599,6 +599,41 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 19: Head/Tail command option parsing
+        print("Test 19: Head/Tail command option parsing...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo one > /tmp/ht1.txt") == 0
+            assert shell.execute("echo two >> /tmp/ht1.txt") == 0
+            assert shell.execute("echo three >> /tmp/ht1.txt") == 0
+            assert shell.execute("echo alpha > /tmp/ht2.txt") == 0
+            assert shell.execute("echo beta >> /tmp/ht2.txt") == 0
+
+            assert shell.execute("head -n 2 /tmp/ht1.txt > /tmp/head_n.txt") == 0
+            assert fs.read_file("/tmp/head_n.txt") == b"one\ntwo\n"
+            assert shell.execute("tail -n2 /tmp/ht1.txt > /tmp/tail_n.txt") == 0
+            assert fs.read_file("/tmp/tail_n.txt") == b"two\nthree\n"
+            assert shell.execute("head -n two /tmp/ht1.txt") == 1
+            assert shell.execute("tail -n -1 /tmp/ht1.txt") == 1
+            assert shell.execute("head -z /tmp/ht1.txt") == 1
+            assert shell.execute("tail -z /tmp/ht1.txt") == 1
+
+            assert shell.execute("head -n 1 /tmp/ht1.txt /tmp/ht2.txt > /tmp/head_multi.txt") == 0
+            assert b"==> /tmp/ht1.txt <==" in fs.read_file("/tmp/head_multi.txt")
+            assert b"==> /tmp/ht2.txt <==" in fs.read_file("/tmp/head_multi.txt")
+
+            assert shell.execute("tail -n 1 /tmp/ht1.txt /tmp/ht2.txt > /tmp/tail_multi.txt") == 0
+            assert b"==> /tmp/ht1.txt <==" in fs.read_file("/tmp/tail_multi.txt")
+            assert b"==> /tmp/ht2.txt <==" in fs.read_file("/tmp/tail_multi.txt")
+
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
