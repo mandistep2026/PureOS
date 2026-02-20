@@ -93,6 +93,7 @@ class Shell:
         try:
             from core.network import NetworkManager
             self.network_manager = NetworkManager()
+            self.network_manager.load_resolv_conf(self.fs)
         except:
             pass
         self._register_commands()
