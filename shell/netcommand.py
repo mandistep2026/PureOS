@@ -89,30 +89,38 @@ class PingCommand(ShellCommand):
             self.nm = shell.network_manager
 
         if not args:
-            shell.print("ping: usage: ping [-c count] destination")
+            shell.print("ping: usage: ping [-c count] [-t timeout] destination")
             return 1
 
         count = 4
+        timeout = 2.0
         target = args[-1]
 
         if "-c" in args:
             try:
                 idx = args.index("-c")
                 count = int(args[idx + 1])
-                target = args[idx + 2] if idx + 2 < len(args) else args[-1]
             except (ValueError, IndexError):
                 shell.print("ping: invalid count")
                 return 1
 
+        if "-t" in args:
+            try:
+                idx = args.index("-t")
+                timeout = float(args[idx + 1])
+            except (ValueError, IndexError):
+                shell.print("ping: invalid timeout")
+                return 1
+
         if target.startswith("-"):
-            shell.print("ping: usage: ping [-c count] destination")
+            shell.print("ping: usage: ping [-c count] [-t timeout] destination")
             return 1
 
         target = self._resolve_target(target, shell)
 
         shell.print(f"PING {target} ({target}): 56 data bytes")
-        
-        success, results, hostname = self.nm.ping(target, count)
+
+        success, results, hostname = self.nm.ping(target, count, timeout)
 
         for r in results:
             status = "OK" if r["success"] else "FAILED"
