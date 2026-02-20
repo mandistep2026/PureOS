@@ -229,7 +229,24 @@ class Shell:
         self.register_command(YesCommand())
         self.register_command(StringsCommand())
         self.register_command(ExprCommand())
-    
+        # v1.9 commands
+        self.register_command(GroupsCommand())
+        self.register_command(PstreeCommand())
+        self.register_command(VmstatCommand())
+        self.register_command(LsofCommand())
+        self.register_command(ZipCommand())
+        self.register_command(UnzipCommand())
+        self.register_command(DdCommand())
+        self.register_command(NlCommand())
+        self.register_command(OdCommand())
+        self.register_command(XxdCommand())
+        self.register_command(NohupCommand())
+        self.register_command(MountCommand())
+        self.register_command(UmountCommand())
+        self.register_command(ColumnCommand())
+        self.register_command(StraceCommand())
+        self.register_command(InstallCommand())
+
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
         self.commands[command.name] = command
