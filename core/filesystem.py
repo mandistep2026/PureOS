@@ -76,6 +76,8 @@ class FileSystem:
 
         # Populate standard system files
         self.create_file("/etc/hostname", b"pureos\n")
+        self.create_file("/etc/resolv.conf",
+            b"nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
         self.create_file("/etc/motd", (
             b"Welcome to PureOS v1.9!\n"
             b"Type 'help' for available commands.\n"
