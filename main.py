@@ -479,6 +479,12 @@ class PureOS:
             assert shell.execute("find /tmp/find_demo -name '*.txt'") == 0
             assert shell.execute("find /tmp/find_demo -type d") == 0
             assert shell.execute("find /tmp/find_demo -type f") == 0
+            assert shell.execute("find /tmp/find_demo -maxdepth 1 > /tmp/find_maxdepth.txt") == 0
+            assert fs.read_file("/tmp/find_maxdepth.txt") == b"/tmp/find_demo\n/tmp/find_demo/readme.txt\n/tmp/find_demo/sub\n"
+            assert shell.execute("find /tmp/find_demo -mindepth 1 -type f > /tmp/find_mindepth.txt") == 0
+            assert fs.read_file("/tmp/find_mindepth.txt") == b"/tmp/find_demo/readme.txt\n/tmp/find_demo/sub/notes.log\n"
+            assert shell.execute("find /tmp/find_demo -mindepth 2 -maxdepth 1") == 1
+            assert shell.execute("find /tmp/find_demo -maxdepth nope") == 1
             assert shell.execute("find /tmp/find_demo -type x") == 1
             print("  PASS")
             passed += 1

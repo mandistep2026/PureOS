@@ -1904,6 +1904,8 @@ class FindCommand(ShellCommand):
         start_path = "."
         name_pattern = None
         type_filter = None
+        max_depth: Optional[int] = None
+        min_depth = 0
 
         i = 0
         while i < len(args):
@@ -1913,6 +1915,32 @@ class FindCommand(ShellCommand):
                     print("find: missing argument to '-name'")
                     return 1
                 name_pattern = args[i + 1]
+                i += 2
+            elif arg == "-maxdepth":
+                if i + 1 >= len(args):
+                    print("find: missing argument to '-maxdepth'")
+                    return 1
+                try:
+                    max_depth = int(args[i + 1])
+                except ValueError:
+                    print(f"find: invalid max depth '{args[i + 1]}'")
+                    return 1
+                if max_depth < 0:
+                    print(f"find: invalid max depth '{args[i + 1]}'")
+                    return 1
+                i += 2
+            elif arg == "-mindepth":
+                if i + 1 >= len(args):
+                    print("find: missing argument to '-mindepth'")
+                    return 1
+                try:
+                    min_depth = int(args[i + 1])
+                except ValueError:
+                    print(f"find: invalid min depth '{args[i + 1]}'")
+                    return 1
+                if min_depth < 0:
+                    print(f"find: invalid min depth '{args[i + 1]}'")
+                    return 1
                 i += 2
             elif arg == "-type":
                 if i + 1 >= len(args):
@@ -1938,16 +1966,24 @@ class FindCommand(ShellCommand):
             print(f"find: '{start_path}': No such file or directory")
             return 1
 
+        if max_depth is not None and min_depth > max_depth:
+            print("find: min depth cannot be greater than max depth")
+            return 1
+
         matches = []
-        pending = [root]
+        pending: List[Tuple[str, int]] = [(root, 0)]
 
         while pending:
-            current_path = pending.pop()
+            current_path, depth = pending.pop()
             inode = shell.fs.get_inode(current_path)
             if inode is None:
                 continue
 
             is_match = True
+            if depth < min_depth:
+                is_match = False
+            if max_depth is not None and depth > max_depth:
+                is_match = False
             if name_pattern and not fnmatch.fnmatch(inode.name, name_pattern):
                 is_match = False
 
@@ -1959,9 +1995,10 @@ class FindCommand(ShellCommand):
             if is_match:
                 matches.append(current_path)
 
-            if inode.type.value == "directory" and isinstance(inode.content, dict):
+            should_descend = max_depth is None or depth < max_depth
+            if should_descend and inode.type.value == "directory" and isinstance(inode.content, dict):
                 for child_name in sorted(inode.content.keys(), reverse=True):
-                    pending.append(inode.content[child_name])
+                    pending.append((inode.content[child_name], depth + 1))
 
         for path in sorted(matches):
             print(path)
