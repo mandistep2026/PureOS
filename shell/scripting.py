@@ -453,18 +453,50 @@ class ScriptExecutor:
         
         if not args:
             return 0
-        
-        # Check for variable assignment (only if no pipeline/redirection operators)
-        has_shell_ops = any(tok in ('|', '||', '&', '&&', '>', '>>', '<', '<<') for tok in args)
-        if not has_shell_ops and '=' in args[0] and not args[0].startswith('='):
-            parts = args[0].split('=', 1)
-            if len(parts) == 2 and parts[0].isidentifier():
-                self.vars.set(parts[0], parts[1])
-                return 0
-        
-        # Execute via shell (shell handles pipes/redirections)
-        cmd_line = ' '.join(args)
-        return self.shell.execute(cmd_line, save_to_history=False)
+
+        return self._execute_boolean_chain(args)
+
+    def _execute_boolean_chain(self, args: List[str]) -> int:
+        """Execute a chain of commands with && and || short-circuit logic."""
+        # Split into segments around && and ||
+        segments: List[List[str]] = []
+        operators: List[str] = []
+        current: List[str] = []
+        for token in args:
+            if token in ('&&', '||'):
+                segments.append(current)
+                operators.append(token)
+                current = []
+            else:
+                current.append(token)
+        if current:
+            segments.append(current)
+
+        exit_code = 0
+        for idx, segment in enumerate(segments):
+            if not segment:
+                continue
+            if idx > 0:
+                prev_op = operators[idx - 1]
+                if prev_op == '&&' and exit_code != 0:
+                    continue
+                if prev_op == '||' and exit_code == 0:
+                    continue
+
+            # Check for variable assignment (only if no pipeline/redirection operators)
+            has_shell_ops = any(tok in ('|', '&', '>', '>>', '<', '<<') for tok in segment)
+            if not has_shell_ops and '=' in segment[0] and not segment[0].startswith('='):
+                parts = segment[0].split('=', 1)
+                if len(parts) == 2 and parts[0].isidentifier():
+                    self.vars.set(parts[0], parts[1])
+                    exit_code = 0
+                    continue
+
+            cmd_line = ' '.join(segment)
+            exit_code = self.shell.execute(cmd_line, save_to_history=False)
+            self.vars.last_exit_code = exit_code
+
+        return exit_code
     
     def _execute_if(self, tokens: List[Token]) -> int:
         """Execute if statement."""
