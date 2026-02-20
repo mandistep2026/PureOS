@@ -70,15 +70,20 @@ class FileSystem:
         # Populate standard system files
         self.create_file("/etc/hostname", b"pureos\n")
         self.create_file("/etc/motd", (
-            b"Welcome to PureOS v1.7!\n"
+            b"Welcome to PureOS v1.9!\n"
             b"Type 'help' for available commands.\n"
             b"Type 'pkg list -a' to see available packages.\n"
         ))
         self.create_file("/etc/shells", b"/bin/sh\n/bin/bash\n/bin/zsh\n")
         self.create_file("/etc/os-release",
-            b'NAME="PureOS"\nVERSION="1.7"\nID=pureos\nPRETTY_NAME="PureOS 1.7"\n')
+            b'NAME="PureOS"\nVERSION="1.9"\nID=pureos\nPRETTY_NAME="PureOS 1.9"\n')
         self.create_file("/proc/version",
-            b"PureOS 1.7 (python_vm) #1 SMP\n")
+            b"PureOS 1.9 (python_vm) #1 SMP\n")
+        # Placeholder /etc/passwd and /etc/group — populated by UserManager after init
+        self.create_file("/etc/passwd",
+            b"root:x:0:0:/root:/bin/sh\n")
+        self.create_file("/etc/group",
+            b"root:x:0:root\n")
         self.create_file("/proc/uptime", b"0.00 0.00\n")
         self.create_file("/proc/net/dev",
             b"Inter-|   Receive  |  Transmit\n"
