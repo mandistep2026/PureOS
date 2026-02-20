@@ -397,7 +397,9 @@ class SysdiagCommand(ShellCommand):
             i += 1
 
         try:
-            checker = HealthChecker(shell.kernel)
+            init_sys = getattr(shell.kernel, 'init_system', None)
+            collector = MetricsCollector(shell.kernel, shell.fs, init_system=init_sys)
+            checker = HealthChecker(collector, shell.kernel, shell.fs, init_system=init_sys)
         except Exception as e:
             print(f"sysdiag: health checker unavailable: {e}")
             return 1
