@@ -750,8 +750,10 @@ class Shell:
         Syntax: case WORD in pattern) commands ;; ... esac
         """
         import fnmatch as _fnmatch
+        # Expand variables in the full line first
+        expanded = self._expand_environment_variables(line)
         # Strip 'case' keyword
-        rest = line[5:].strip()  # after 'case '
+        rest = expanded[5:].strip()  # after 'case '
         # Find 'in' keyword
         in_idx = rest.find(' in ')
         if in_idx == -1:
