@@ -457,6 +457,8 @@ class PureOS:
             assert shell.execute("chmod 755 /tmp/meta.txt") == 0
             inode = fs.get_inode("/tmp/meta.txt")
             assert inode.permissions == "rwxr-xr-x"
+            assert shell.execute("stat /tmp/meta.txt") == 0
+            assert shell.execute("stat /tmp/does-not-exist") == 1
             assert shell.execute("chmod 999 /tmp/meta.txt") == 1
             print("  PASS")
             passed += 1

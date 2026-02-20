@@ -35,6 +35,7 @@ An operating system written entirely in Python using only the standard library. 
 - `sort` - Sort lines in text files (supports `-r` reverse and `-u` unique)
 - `chmod` - Change file permissions (symbolic mode like `rwxr-xr-x` or octal mode like `755`)
 - `chown` - Change file owner/group (format: `owner[:group]`)
+- `stat` - Display file or directory metadata (type, size, owner, permissions, timestamps)
 
 #### System Information
 - `ps` - List running processes
