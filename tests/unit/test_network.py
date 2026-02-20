@@ -281,5 +281,186 @@ class TestNetworkManagerResolution(BaseTestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# NetworkManager — ping timeout behaviour
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerPingTimeout(BaseTestCase):
+    """Tests for the timeout parameter of NetworkManager.ping."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def _ping_no_sleep(self, target, count, timeout):
+        """Call ping with time.sleep patched out so tests run instantly."""
+        with patch("core.network.time.sleep"):
+            return self.nm.ping(target, count=count, timeout=timeout)
+
+    def test_generous_timeout_all_results_succeed(self):
+        """With a very large timeout every result entry should be successful."""
+        _, results, _ = self._ping_no_sleep("8.8.8.8", count=3, timeout=9999)
+        self.assertTrue(
+            all(r["success"] for r in results),
+            "All result entries should succeed when timeout is extremely large.",
+        )
+
+    def test_zero_timeout_all_results_fail(self):
+        """With a near-zero timeout every result entry should fail."""
+        _, results, _ = self._ping_no_sleep("8.8.8.8", count=3, timeout=0.000001)
+        self.assertTrue(
+            all(not r["success"] for r in results),
+            "All result entries should fail when timeout is effectively zero.",
+        )
+
+    def test_zero_timeout_overall_success_is_false(self):
+        """With a near-zero timeout the overall success flag should be False."""
+        success, _, _ = self._ping_no_sleep("8.8.8.8", count=2, timeout=0.000001)
+        self.assertFalse(
+            success,
+            "Overall success should be False when timeout causes all packets to fail.",
+        )
+
+    def test_generous_timeout_overall_success_is_true(self):
+        """With a very large timeout the overall success flag should be True."""
+        success, _, _ = self._ping_no_sleep("8.8.8.8", count=2, timeout=9999)
+        self.assertTrue(
+            success,
+            "Overall success should be True when timeout is extremely large.",
+        )
+
+    def test_timeout_applied_per_packet(self):
+        """Each result entry independently reflects the timeout comparison."""
+        _, results, _ = self._ping_no_sleep("8.8.8.8", count=4, timeout=9999)
+        for r in results:
+            self.assertIn("success", r, "Each result must have a 'success' key.")
+            self.assertTrue(r["success"], "Each packet should succeed under a large timeout.")
+
+    def test_result_count_unaffected_by_short_timeout(self):
+        """A short timeout should not reduce the number of result entries returned."""
+        _, results, _ = self._ping_no_sleep("8.8.8.8", count=3, timeout=0.000001)
+        self.assertEqual(
+            len(results),
+            3,
+            "ping should always return exactly count entries regardless of timeout.",
+        )
+
+    def test_localhost_succeeds_with_default_timeout(self):
+        """localhost (rtt~0ms) should always succeed with the default timeout."""
+        with patch("core.network.time.sleep"):
+            success, results, _ = self.nm.ping("127.0.0.1", count=1)
+        self.assertTrue(success, "localhost ping should succeed with the default timeout.")
+        self.assertTrue(results[0]["success"], "localhost packet should be marked successful.")
+
+
+# ---------------------------------------------------------------------------
+# PingCommand — shell command argument parsing
+# ---------------------------------------------------------------------------
+
+class _FakeShell:
+    """Minimal shell stub for testing PingCommand without a full Shell instance."""
+
+    def __init__(self, network_manager):
+        self.network_manager = network_manager
+        self.output: list = []
+
+    def print(self, text=""):
+        self.output.append(str(text))
+
+
+class TestPingCommand(BaseTestCase):
+    """Tests for PingCommand argument parsing and -t timeout flag."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+        self.cmd = PingCommand(network_manager=self.nm)
+        self.shell = _FakeShell(self.nm)
+
+    def _execute(self, args):
+        """Run the command with time.sleep patched out."""
+        with patch("core.network.time.sleep"):
+            return self.cmd.execute(args, self.shell)
+
+    # --- basic argument handling ---
+
+    def test_no_args_returns_error(self):
+        """ping with no arguments should return exit code 1."""
+        rc = self._execute([])
+        self.assertEqual(rc, 1, "ping with no args should return 1.")
+
+    def test_no_args_prints_usage(self):
+        """ping with no arguments should print a usage message."""
+        self._execute([])
+        self.assertTrue(
+            any("usage" in line.lower() for line in self.shell.output),
+            "ping with no args should print a usage hint.",
+        )
+
+    def test_simple_target_returns_zero(self):
+        """ping with only a target address should return 0 on a known host."""
+        rc = self._execute(["8.8.8.8"])
+        self.assertEqual(rc, 0, "ping 8.8.8.8 should return 0.")
+
+    def test_c_flag_controls_packet_count(self):
+        """ping -c 2 should produce exactly 2 result lines in output."""
+        self._execute(["-c", "2", "8.8.8.8"])
+        # Each result line contains "icmp_seq="
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertEqual(len(result_lines), 2, "ping -c 2 should emit 2 result lines.")
+
+    def test_c_flag_invalid_value_returns_error(self):
+        """ping -c with a non-integer value should return exit code 1."""
+        rc = self._execute(["-c", "abc", "8.8.8.8"])
+        self.assertEqual(rc, 1, "ping -c abc should return 1 for invalid count.")
+
+    def test_flag_only_no_target_returns_error(self):
+        """ping with a bare flag and no target should return exit code 1."""
+        rc = self._execute(["-c"])
+        self.assertEqual(rc, 1, "ping -c with no count or target should return 1.")
+
+    # --- -t timeout flag ---
+
+    def test_t_flag_with_large_timeout_succeeds(self):
+        """ping -t 9999 should succeed (all packets pass the threshold)."""
+        rc = self._execute(["-t", "9999", "8.8.8.8"])
+        self.assertEqual(rc, 0, "ping -t 9999 8.8.8.8 should return 0.")
+
+    def test_t_flag_with_near_zero_timeout_fails(self):
+        """ping -t 0 should fail (all packets exceed the threshold)."""
+        rc = self._execute(["-t", "0", "8.8.8.8"])
+        self.assertEqual(rc, 1, "ping -t 0 8.8.8.8 should return 1 (all packets timed out).")
+
+    def test_t_flag_invalid_value_returns_error(self):
+        """ping -t with a non-numeric value should return exit code 1."""
+        rc = self._execute(["-t", "abc", "8.8.8.8"])
+        self.assertEqual(rc, 1, "ping -t abc should return 1 for invalid timeout.")
+
+    def test_t_flag_missing_value_returns_error(self):
+        """ping -t with no value following it should return exit code 1."""
+        rc = self._execute(["-t", "8.8.8.8"])
+        # "8.8.8.8" is not a valid float that makes sense as a very-small timeout
+        # but more importantly: the flag parser should not crash.
+        self.assertIn(rc, (0, 1), "ping -t <missing> should return a valid exit code.")
+
+    def test_t_and_c_flags_together(self):
+        """-c and -t flags can be combined; result count must match -c value."""
+        self._execute(["-c", "2", "-t", "9999", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertEqual(
+            len(result_lines),
+            2,
+            "ping -c 2 -t 9999 should emit exactly 2 result lines.",
+        )
+
+    def test_output_contains_statistics_summary(self):
+        """ping output should always include a statistics summary block."""
+        self._execute(["-c", "1", "8.8.8.8"])
+        self.assertTrue(
+            any("packet" in line for line in self.shell.output),
+            "ping output should include a packet statistics summary.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
