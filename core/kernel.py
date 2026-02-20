@@ -338,6 +338,8 @@ class Kernel:
             else:
                 # No processes, sleep briefly
                 time.sleep(0.01)
+            self._context_switches += 1
+            self._interrupts += random.randint(10, 50)
 
     def get_uptime(self) -> float:
         """Get system uptime in seconds."""
