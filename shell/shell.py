@@ -1507,17 +1507,69 @@ class ChmodCommand(ShellCommand):
         if len(mode) == 9 and all(ch in "rwx-" for ch in mode):
             return mode
 
-        if len(mode) != 3 or any(ch not in "01234567" for ch in mode):
+        # Octal mode (e.g. "644", "755")
+        if len(mode) == 3 and all(ch in "01234567" for ch in mode):
+            symbolic = []
+            for digit in mode:
+                value = int(digit)
+                symbolic.append("r" if value & 4 else "-")
+                symbolic.append("w" if value & 2 else "-")
+                symbolic.append("x" if value & 1 else "-")
+            return "".join(symbolic)
+
+        # Symbolic mode: [ugoa]*[+-=][rwx]+ (e.g. "+x", "-w", "u+x", "a+r", "ug+rx")
+        import re as _re
+        m = _re.match(r'^([ugoa]*)([+\-=])([rwx]+)$', mode)
+        if m:
+            # We'll return a sentinel that signals "modify existing permissions"
+            # Since we need the current permissions to compute, we store the
+            # symbolic op and let execute() handle it via a special path.
+            return mode  # return mode string as-is; execute() detects it
+        return None
+
+    def _apply_symbolic_mode(self, current: str, mode: str) -> Optional[str]:
+        """Apply a symbolic chmod mode (e.g. +x, u+x) to a current permission string."""
+        import re as _re
+        m = _re.match(r'^([ugoa]*)([+\-=])([rwx]+)$', mode)
+        if not m:
             return None
+        who, op, perms = m.group(1), m.group(2), m.group(3)
 
-        symbolic = []
-        for digit in mode:
-            value = int(digit)
-            symbolic.append("r" if value & 4 else "-")
-            symbolic.append("w" if value & 2 else "-")
-            symbolic.append("x" if value & 1 else "-")
+        # Expand 'a' or empty who to 'ugo'
+        if not who or 'a' in who:
+            who = 'ugo'
 
-        return "".join(symbolic)
+        # Parse current 9-char permission string into list
+        chars = list(current) if len(current) == 9 else list("rw-rw-r--")
+
+        # Mapping: u=0..2, g=3..5, o=6..8
+        who_map = {'u': (0, 1, 2), 'g': (3, 4, 5), 'o': (6, 7, 8)}
+        # Position within a triplet for each permission letter
+        perm_pos = {'r': 0, 'w': 1, 'x': 2}
+        perm_char = {0: 'r', 1: 'w', 2: 'x'}
+
+        for w in who:
+            indices = who_map.get(w, ())
+            for p in perms:
+                pos = perm_pos.get(p)
+                if pos is None:
+                    continue
+                idx = indices[pos]
+                if op == '+':
+                    chars[idx] = perm_char[pos]
+                elif op == '-':
+                    chars[idx] = '-'
+                elif op == '=':
+                    # Set only this triplet
+                    for clear_pos in range(3):
+                        ci = indices[clear_pos]
+                        if perm_char[clear_pos] in perms:
+                            chars[ci] = perm_char[clear_pos]
+                        else:
+                            chars[ci] = '-'
+                    break  # = handles all bits at once per who
+
+        return "".join(chars)
 
     def execute(self, args: List[str], shell) -> int:
         if len(args) < 2:
