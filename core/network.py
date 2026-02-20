@@ -408,6 +408,22 @@ class NetworkManager:
         self.hostname = hostname
         return True
 
+    def load_resolv_conf(self, fs) -> None:
+        """Load DNS resolver configuration from /etc/resolv.conf in *fs*.
+
+        Reads the file, parses it with :meth:`ResolverConfig.from_resolv_conf`,
+        and replaces the current :attr:`resolver_config`.  If the file is
+        absent or empty the existing configuration is left unchanged.
+        """
+        data = fs.read_file("/etc/resolv.conf")
+        if not data:
+            return
+        text = data.decode("utf-8", errors="replace")
+        parsed = ResolverConfig.from_resolv_conf(text)
+        # Only apply when the file contained at least one useful directive.
+        if parsed.nameservers or parsed.search:
+            self.resolver_config = parsed
+
     def get_resolver_config(self) -> ResolverConfig:
         """Return the current DNS resolver configuration."""
         return self.resolver_config
