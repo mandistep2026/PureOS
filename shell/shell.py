@@ -2883,6 +2883,11 @@ class FindCommand(ShellCommand):
         super().__init__("find", "Search for files and directories")
 
     def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("find: missing path argument")
+            print("Usage: find <path> [-name pattern] [-type f|d] [-maxdepth N] [-mindepth N]")
+            return 1
+
         start_path = "."
         name_pattern = None
         type_filter = None
