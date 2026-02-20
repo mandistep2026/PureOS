@@ -509,3 +509,374 @@ bob@pureos:/root$
 ```
 
 ---
+
+## 3. Advanced Features
+
+### 3.1 System Logging
+
+PureOS includes a full syslog-compatible logging infrastructure with 8 log levels (EMERG, ALERT, CRIT, ERR, WARNING, NOTICE, INFO, DEBUG) and 24 facilities.
+
+#### Viewing Kernel Messages
+
+```bash
+dmesg                             # Show all kernel ring buffer messages
+dmesg -n 20                       # Show last 20 messages
+dmesg -l WARNING                  # Filter by log level (WARNING and above)
+dmesg -l ERR                      # Show only errors
+dmesg -c                          # Show messages then clear the buffer
+```
+
+#### Adding Log Entries
+
+```bash
+logger "Backup completed"         # Log a message (default: INFO, USER facility)
+logger -p warning "Disk nearing capacity"   # Log with WARNING priority
+logger -p err "Service failed to start"     # Log as error
+```
+
+#### Querying the System Journal
+
+```bash
+journalctl                        # Show all journal entries
+journalctl -n 50                  # Show last 50 entries
+journalctl -p err                 # Show only errors and above
+journalctl -u syslog.service      # Filter by service unit
+journalctl -f                     # Follow (stream) new log entries
+```
+
+### 3.2 Service Management
+
+PureOS includes a systemd-style init system with service lifecycle management.
+
+#### systemctl Commands
+
+```bash
+systemctl status                  # Show status of all services
+systemctl status syslog.service   # Status of a specific service
+systemctl start network.service   # Start a service
+systemctl stop network.service    # Stop a service
+systemctl restart cron.service    # Restart a service
+systemctl enable syslog.service   # Enable service to start automatically
+systemctl disable cron.service    # Disable automatic start
+```
+
+**Default services:**
+
+| Service           | Description                     |
+|-------------------|---------------------------------|
+| `syslog.service`  | System logging daemon           |
+| `network.service` | Virtual network stack           |
+| `cron.service`    | Job scheduler                   |
+
+**Service states:** `inactive`, `activating`, `active`, `deactivating`, `failed`, `reloading`
+
+Example output:
+
+```
+● syslog.service - System Logging Service
+   Loaded: enabled
+   Active: active (running)
+```
+
+### 3.3 Resource Management
+
+#### User Limits (ulimit)
+
+```bash
+ulimit                            # Show all current resource limits
+ulimit -n                         # Show max number of open files
+ulimit -u                         # Show max number of user processes
+ulimit -s                         # Show stack size limit
+ulimit -n 2048                    # Set max open files to 2048
+ulimit -v 524288                  # Set virtual memory limit (KB)
+```
+
+Resource types include: CPU time, file size, data size, stack size, open files (`NOFILE`), processes (`NPROC`), locked memory, and address space.
+
+#### Control Groups (cgctl)
+
+Control groups allow you to organize processes into hierarchies with resource limits.
+
+```bash
+cgctl list                        # List all cgroups
+cgctl show /system                # Show details of a cgroup
+cgctl create /user/alice          # Create a new cgroup
+cgctl delete /user/alice          # Remove a cgroup
+cgctl move 42 /system             # Move PID 42 into the /system cgroup
+```
+
+**Default cgroups:**
+
+| Cgroup    | CPU Shares | Memory Limit | Purpose             |
+|-----------|------------|--------------|---------------------|
+| `/`       | —          | —            | Root cgroup         |
+| `/system` | 2048       | 50 MB        | System services     |
+| `/user`   | 1024       | —            | User sessions       |
+
+### 3.4 IPC Facilities
+
+Inter-process communication tools for inspecting shared resources.
+
+```bash
+ipcs                              # Show all IPC facilities
+```
+
+Output includes:
+- **Pipes** — unidirectional byte streams (64 KB buffers)
+- **Message Queues** — POSIX-style priority queues
+- **Shared Memory** — process-shared memory segments
+- **Semaphores** — counting semaphores for synchronization
+
+### 3.5 Package Management
+
+```bash
+pkg install vim                   # Install a package
+pkg remove vim                    # Remove a package
+pkg list                          # List installed packages
+pkg list -a                       # List all available packages
+pkg search editor                 # Search packages by keyword
+pkg info git                      # Show package information
+pkg depends git                   # Show package dependencies
+pkg update                        # Refresh package database
+```
+
+Example:
+
+```
+alice@pureos:~$ pkg search network
+Available packages matching 'network':
+  iperf3       Network bandwidth measurement tool
+  netcat       Network utility for connections
+  tcpdump      Packet analyzer
+  mtr          Combined traceroute and ping
+```
+
+### 3.6 Cron Jobs (Scheduled Tasks)
+
+PureOS includes a cron scheduler that runs commands on a timer (interval-based).
+
+```bash
+cron list                         # List all scheduled jobs
+cron add backup 3600 tar -cf /tmp/backup.tar /home
+                                  # Schedule "backup" to run every 3600 seconds
+cron add monitor 60 ps            # Run `ps` every 60 seconds
+cron pause 1                      # Pause job with ID 1
+cron resume 1                     # Resume job with ID 1
+cron remove 1                     # Remove job with ID 1
+```
+
+The `cron add` syntax is: `cron add <name> <interval_seconds> <command>`
+
+Example output of `cron list`:
+
+```
+ID   Name                 Interval   Runs   Last Run   State
+--------------------------------------------------------------------
+1    backup               1h         3      10:30:00   active
+2    monitor              60s        45     10:31:00   active
+```
+
+### 3.7 Networking
+
+PureOS simulates a virtual network stack with two interfaces:
+
+| Interface | Address        | Type      |
+|-----------|----------------|-----------|
+| `lo`      | 127.0.0.1/8    | Loopback  |
+| `eth0`    | 192.168.1.100/24 | Ethernet |
+
+```bash
+ifconfig                          # Show network interface configuration
+ifconfig eth0                     # Show specific interface
+ping 8.8.8.8                      # Ping a host (simulated, works with well-known IPs)
+ping google.com                   # Ping by hostname (DNS resolution simulated)
+netstat                           # Show network connections and statistics
+route                             # Show routing table
+arp                               # Show ARP cache
+ip addr                           # Modern interface info (like ifconfig)
+hostname                          # Show or set the system hostname
+traceroute 8.8.8.8                # Trace route to host
+dig google.com                    # DNS lookup
+nslookup cloudflare.com           # DNS name resolution
+```
+
+#### Fetching URLs
+
+```bash
+fetch https://example.com                    # Download and print a URL
+fetch -o page.html https://example.com       # Save to a file
+fetch -H 'Accept: application/json' https://api.example.com
+fetch -X POST https://api.example.com/data   # HTTP POST request
+```
+
+### 3.8 System Monitoring (v2.1 Features)
+
+#### Memory Statistics
+
+```bash
+free -h                           # Human-readable memory breakdown
+free -m                           # In megabytes
+free -h -t                        # Include totals row
+free -h -s 5                      # Refresh every 5 seconds
+```
+
+#### I/O Statistics
+
+```bash
+iostat                            # CPU and I/O statistics
+iostat -x                         # Extended statistics per device
+iostat -d                         # Device I/O only
+iostat -x 2 5                     # Extended stats, every 2s, 5 times
+```
+
+#### CPU Statistics
+
+```bash
+mpstat                            # Per-CPU statistics
+mpstat -P ALL                     # Stats for all CPUs
+mpstat -A 1                       # All stats, refresh every second
+```
+
+#### System Diagnostics
+
+```bash
+sysdiag                           # Run comprehensive system checks
+sysdiag -v                        # Verbose output
+sysdiag -q                        # Quiet mode (exit code only)
+sysdiag --category SYSTEM         # Filter by category
+sysdiag --fix                     # Attempt automatic fixes
+```
+
+Checks performed: memory pressure, process count, zombie processes, filesystem health, service status, swap usage, and I/O load. Returns exit code `1` if any CRITICAL issue is found.
+
+```bash
+sysdiag && echo "All systems OK" || echo "Issues detected"
+```
+
+#### System Health Dashboard
+
+```bash
+syshealth                         # Full health dashboard
+syshealth --brief                 # One-line summary
+syshealth --watch                 # Live updating dashboard
+syshealth --json                  # JSON output for scripting
+syshealth --cpu --mem             # Show only CPU and memory sections
+```
+
+#### Performance Profiling
+
+```bash
+perf stat                         # Collect syscall statistics
+perf stat -e read                 # Filter by event type
+perf top                          # Live syscall monitoring
+perf record                       # Record performance data
+perf report                       # Display aggregated performance report
+```
+
+#### Interactive Process Viewer (htop)
+
+```bash
+htop                              # Full-screen interactive process viewer
+htop -d 20                        # Update every 2 seconds (tenths of seconds)
+htop -u alice                     # Filter to show only alice's processes
+htop -s mem                       # Sort by memory usage
+htop -p 1,2,3                     # Filter to specific PIDs
+```
+
+Interactive keys while in `htop`: `q` or `F10` to quit, `k` to kill selected process, `s` to cycle sort column.
+
+### 3.9 Archive Tools
+
+#### tar
+
+```bash
+tar -cf archive.tar file1 file2   # Create an archive
+tar -cf backup.tar /home/alice    # Archive a directory
+tar -tf archive.tar               # List archive contents
+tar -xf archive.tar               # Extract archive (current directory)
+tar -xf archive.tar -C /tmp       # Extract to /tmp
+tar -cvf archive.tar dir/         # Verbose creation
+```
+
+#### zip / unzip
+
+```bash
+zip archive.zip file1.txt file2.txt   # Create a zip archive
+unzip archive.zip                     # Extract to current directory
+unzip -d /tmp/extracted archive.zip   # Extract to specific directory
+```
+
+### 3.10 Advanced File Utilities
+
+```bash
+diff file1.txt file2.txt          # Compare two files
+diff -u file1.txt file2.txt       # Unified diff format
+
+dd if=source.img of=dest.img bs=512   # Block-level copy
+dd if=source of=dest count=100        # Copy first 100 blocks
+
+nl file.txt                       # Number lines (non-empty by default)
+nl -b a file.txt                  # Number all lines including empty
+
+od file.bin                       # Octal dump
+od -x file.bin                    # Hex dump
+od -c file.bin                    # Character dump
+
+xxd file.bin                      # Hex dump with ASCII sidebar
+xxd -r hexdump.txt binary.bin     # Reverse: hex dump back to binary
+
+column -t data.txt                # Align data into table columns
+column -s: -t /etc/passwd         # Use : as separator
+
+strings binary.bin                # Extract printable strings from binary
+strace ls                         # Trace system calls (simulated)
+mount                             # List mounted filesystems
+mount /dev/sdb /mnt               # Mount a virtual device
+umount /mnt                       # Unmount
+```
+
+### 3.11 Miscellaneous Utilities
+
+```bash
+bc                                # Calculator (supports +, -, *, /, sqrt, etc.)
+echo "2 + 2" | bc                 # Pipe expression to calculator
+bc <<< "sqrt(144)"                # Inline calculation
+
+seq 10                            # Print 1 through 10
+seq 5 10                          # Print 5 through 10
+seq 0 2 20                        # Print 0, 2, 4, ... 20 (step 2)
+
+cal                               # Display current month calendar
+cal 3 2025                        # Calendar for March 2025
+cal -y                            # Full year calendar
+
+date                              # Show current date and time
+sleep 5                           # Pause for 5 seconds
+watch -n 2 date                   # Run `date` every 2 seconds
+watch -n 1 -c 10 ps               # Run `ps` every second, 10 times
+
+expr 5 + 3                        # Evaluate arithmetic expression
+expr length "hello"               # String length
+printf "%-10s %5d\n" alice 42     # Formatted output
+
+tee output.txt                    # Write stdin to both stdout and a file
+tee -a output.txt                 # Append mode
+
+rev                               # Reverse characters in each line
+echo "hello" | rev                # Outputs: olleh
+
+basename /home/alice/notes.txt    # Outputs: notes.txt
+dirname /home/alice/notes.txt     # Outputs: /home/alice
+realpath ./notes.txt              # Resolve to absolute path
+
+mktemp                            # Create a unique temp file in /tmp
+mktemp -d                         # Create a unique temp directory
+mktemp /tmp/myapp.XXXXXX          # Custom template (X's replaced)
+
+lsof                              # List open files
+lsof -u alice                     # Open files for user alice
+
+vmstat                            # Virtual memory statistics
+```
+
+---
