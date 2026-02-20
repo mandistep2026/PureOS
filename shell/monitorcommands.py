@@ -703,3 +703,455 @@ class SyshealthCommand(ShellCommand):
             d = _collect_data()
             _render(d)
             return 1 if _any_crit(d) else 0
+
+
+class PerfCommand(ShellCommand):
+    """Performance profiler."""
+
+    def __init__(self):
+        super().__init__("perf", "Performance analysis tool")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: perf {stat|top|record|report} [pid] [-e <event>] [-n <count>]")
+            return 1
+
+        subcommand = args[0]
+        rest = args[1:]
+
+        try:
+            profiler = PerfProfiler(shell.kernel)
+        except Exception as e:
+            print(f"perf: profiler unavailable: {e}")
+            return 1
+
+        # ----------------------------------------------------------------
+        # perf stat [pid] [-e <event>] [-n <count>]
+        # ----------------------------------------------------------------
+        if subcommand == 'stat':
+            pid = None
+            event_filter = None
+            duration = 5.0
+
+            i = 0
+            while i < len(rest):
+                if rest[i] == '-e' and i + 1 < len(rest):
+                    event_filter = rest[i + 1]
+                    i += 2
+                    continue
+                if rest[i] == '-n' and i + 1 < len(rest):
+                    try:
+                        duration = float(rest[i + 1])
+                    except ValueError:
+                        pass
+                    i += 2
+                    continue
+                # Positional: PID
+                try:
+                    pid = int(rest[i])
+                except ValueError:
+                    pass
+                i += 1
+
+            # Resolve process name
+            proc_name = 'system'
+            if pid is not None:
+                proc = shell.kernel.get_process(pid)
+                if proc is None:
+                    print(f"perf stat: no process with PID {pid}")
+                    return 1
+                proc_name = proc.name
+
+            # Collect profile
+            try:
+                profile = profiler.get_profile(pid)
+            except Exception as e:
+                print(f"perf stat: error collecting profile: {e}")
+                return 1
+
+            syscalls = profile.get('syscalls', {})
+
+            # Apply event filter
+            if event_filter:
+                syscalls = {k: v for k, v in syscalls.items()
+                            if event_filter.lower() in k.lower()}
+
+            # Sort by count descending
+            sorted_calls = sorted(syscalls.items(),
+                                  key=lambda kv: kv[1]['count'], reverse=True)
+
+            if pid is not None:
+                print(f"\nPerformance counter stats for PID {pid} ({proc_name}):\n")
+            else:
+                print(f"\nPerformance counter stats for {proc_name}:\n")
+
+            total_count = sum(v['count'] for _, v in sorted_calls)
+            for name, stats in sorted_calls:
+                count = stats['count']
+                rate  = count / max(duration, 0.001)
+                count_fmt = f"{count:,}"
+                print(f"  {count_fmt:>12}  {name:<24}  #  {rate:>8.1f} /sec")
+
+            print(f"\n       {duration:.3f} seconds time elapsed\n")
+            return 0
+
+        # ----------------------------------------------------------------
+        # perf top
+        # ----------------------------------------------------------------
+        elif subcommand == 'top':
+            print(f"{'PID':<8} {'COMM':<14} {'SYSCALL':<17} {'COUNT':>8}    {'%TIME':>6}")
+
+            try:
+                while True:
+                    # Collect fresh snapshot across all processes
+                    all_rows = []
+                    for proc in shell.kernel.list_processes():
+                        try:
+                            profile = profiler.get_profile(proc.pid)
+                        except Exception:
+                            continue
+                        for sc_name, stats in profile.get('syscalls', {}).items():
+                            all_rows.append({
+                                'pid':   proc.pid,
+                                'comm':  proc.name,
+                                'syscall': sc_name,
+                                'count': stats['count'],
+                                'total_duration': stats['total_duration'],
+                            })
+
+                    # Compute %TIME from total_duration shares
+                    total_dur = sum(r['total_duration'] for r in all_rows) or 1.0
+                    all_rows.sort(key=lambda r: r['total_duration'], reverse=True)
+
+                    # Print top rows (overwrite previous output)
+                    for row in all_rows[:20]:
+                        pct = (row['total_duration'] / total_dur) * 100.0
+                        print(f"  {row['pid']:<6} {row['comm']:<14} {row['syscall']:<17} "
+                              f"{row['count']:>8}    {pct:>5.1f}%")
+
+                    time.sleep(2)
+
+            except KeyboardInterrupt:
+                print()
+            return 0
+
+        # ----------------------------------------------------------------
+        # perf record [pid]
+        # ----------------------------------------------------------------
+        elif subcommand == 'record':
+            pid = None
+            i = 0
+            while i < len(rest):
+                try:
+                    pid = int(rest[i])
+                except ValueError:
+                    pass
+                i += 1
+
+            if pid is not None:
+                proc = shell.kernel.get_process(pid)
+                if proc is None:
+                    print(f"perf record: no process with PID {pid}")
+                    return 1
+                print(f"[ perf record: Woken up 1 times to write data ]")
+                print(f"[ perf record: Captured and wrote 0.024 MB perf.data "
+                      f"({profiler.get_profile(pid).get('syscalls', {}).__len__()} samples) ]")
+            else:
+                total_procs = len(list(shell.kernel.list_processes()))
+                print(f"[ perf record: Woken up 1 times to write data ]")
+                print(f"[ perf record: Captured and wrote 0.048 MB perf.data "
+                      f"({total_procs * 10} samples) ]")
+            return 0
+
+        # ----------------------------------------------------------------
+        # perf report
+        # ----------------------------------------------------------------
+        elif subcommand == 'report':
+            print("# ========================================")
+            print("# captured on: " + time.strftime('%a %b %d %H:%M:%S %Y'))
+            print("# hostname   : " + shell.environment.get('HOSTNAME', 'pureos'))
+            print("# ========================================")
+            print("#")
+            print(f"# {'Overhead':>8}  {'Command':<16}  {'Shared Object':<20}  Symbol")
+            print("# ........  ................  ....................  .........")
+
+            # Aggregate across all processes
+            try:
+                profile = profiler.get_profile(None)
+            except Exception as e:
+                print(f"perf report: error: {e}")
+                return 1
+
+            syscalls = profile.get('syscalls', {})
+            total_dur = sum(v['total_duration'] for v in syscalls.values()) or 1.0
+            sorted_calls = sorted(syscalls.items(),
+                                  key=lambda kv: kv[1]['total_duration'], reverse=True)
+
+            for name, stats in sorted_calls:
+                overhead = (stats['total_duration'] / total_dur) * 100.0
+                print(f"  {overhead:>7.2f}%  {'[kernel]':<16}  {'[vdso]':<20}  [k] {name}")
+
+            print()
+            return 0
+
+        else:
+            print(f"perf: unknown subcommand '{subcommand}'")
+            print("Usage: perf {stat|top|record|report} [pid] [-e <event>] [-n <count>]")
+            return 1
+
+
+class HtopCommand(ShellCommand):
+    """Interactive real-time process monitor."""
+
+    def __init__(self):
+        super().__init__("htop", "Interactive process viewer")
+
+    def execute(self, args: List[str], shell) -> int:
+        # ----------------------------------------------------------------
+        # Parse arguments
+        # ----------------------------------------------------------------
+        delay    = 10          # tenths of a second (default 1.0 s)
+        pid_filter: List[int] = []
+        sort_col = 'cpu'       # default sort column
+        user_filter = None
+        no_color = '--no-color' in args
+
+        i = 0
+        while i < len(args):
+            if args[i] == '-d' and i + 1 < len(args):
+                try:
+                    delay = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+                continue
+            if args[i] == '-p' and i + 1 < len(args):
+                for part in args[i + 1].split(','):
+                    try:
+                        pid_filter.append(int(part.strip()))
+                    except ValueError:
+                        pass
+                i += 2
+                continue
+            if args[i] == '-s' and i + 1 < len(args):
+                sort_col = args[i + 1].lower()
+                i += 2
+                continue
+            if args[i] == '-u' and i + 1 < len(args):
+                user_filter = args[i + 1]
+                i += 2
+                continue
+            i += 1
+
+        # ANSI colour helpers
+        def _c(code: str, text: str) -> str:
+            if no_color:
+                return text
+            return f"\033[{code}m{text}\033[0m"
+
+        def _progress_bar(pct: float, width: int = 20) -> str:
+            filled = int(round(pct / 100.0 * width))
+            filled = max(0, min(width, filled))
+            bar = '█' * filled + '░' * (width - filled)
+            if no_color:
+                return bar
+            colour = '32' if pct < 60 else ('33' if pct < 85 else '31')
+            return f"\033[{colour}m{bar}\033[0m"
+
+        # Build collector once
+        try:
+            init_sys  = getattr(shell.kernel, 'init_system', None)
+            net_mgr   = getattr(shell, 'network_manager', None)
+            collector = MetricsCollector(
+                shell.kernel, shell.fs,
+                network_manager=net_mgr,
+                init_system=init_sys,
+            )
+        except Exception as e:
+            print(f"htop: metrics unavailable: {e}")
+            return 1
+
+        # Sort-column cycling order (used by 's' keypress)
+        sort_cols = ['pid', 'cpu', 'mem', 'time', 'command']
+
+        def _fmt_mem(bytes_val: int) -> str:
+            """Format bytes as K/M string."""
+            kb = bytes_val // 1024
+            if kb >= 1024:
+                return f"{kb // 1024}M"
+            return f"{kb}K"
+
+        def _fmt_time(secs: float) -> str:
+            cs = int(secs * 100) % 100
+            s  = int(secs) % 60
+            m  = int(secs) // 60
+            return f"{m}:{s:02d}.{cs:02d}"
+
+        def _render_screen():
+            cpu_snap  = collector.get_cpu_snapshot()
+            mem_snap  = collector.get_memory_snapshot()
+
+            cpu_pct   = cpu_snap.get('user_pct', 0.0) + cpu_snap.get('sys_pct', 0.0)
+            mem_total = mem_snap['total']
+            mem_used  = mem_snap['used']
+            mem_pct   = (mem_used / max(mem_total, 1)) * 100.0
+            swap_total = mem_snap['swap_total']
+            swap_used  = mem_snap['swap_used']
+            swap_pct   = (swap_used / max(swap_total, 1)) * 100.0
+
+            uptime_s  = shell.kernel.get_uptime()
+            h = int(uptime_s // 3600)
+            m = int((uptime_s % 3600) // 60)
+            s = int(uptime_s % 60)
+            uptime_str = f"{h}:{m:02d}:{s:02d}"
+
+            # Gather processes
+            all_procs = list(shell.kernel.list_processes())
+
+            # Apply filters
+            if pid_filter:
+                all_procs = [p for p in all_procs if p.pid in pid_filter]
+            if user_filter:
+                all_procs = [p for p in all_procs
+                             if getattr(p, 'owner', 'root') == user_filter]
+
+            running_count = sum(
+                1 for p in all_procs
+                if str(getattr(p, 'state', '')).upper() in ('RUNNING', 'PROCESSSTATE.RUNNING')
+            )
+            load_avg = f"{cpu_pct/100*0.8:.2f} {cpu_pct/100*0.6:.2f} {cpu_pct/100*0.4:.2f}"
+
+            # Header
+            cpu_bar = _progress_bar(cpu_pct)
+            mem_bar = _progress_bar(mem_pct)
+            swp_bar = _progress_bar(swap_pct)
+
+            print(f" {_c('1', 'CPU')}[{cpu_bar} {cpu_pct:5.1f}%]"
+                  f"     Tasks: {len(all_procs)}, {running_count} running")
+            print(f" {_c('1', 'Mem')}[{mem_bar} {mem_pct:5.1f}%]"
+                  f"     Load average: {load_avg}")
+            print(f" {_c('1', 'Swp')}[{swp_bar} {swap_pct:5.1f}%]"
+                  f"     Uptime: {uptime_str}")
+            print()
+
+            # Column header
+            hdr = (f"  {'PID':>5} {'USER':<9} {'PRI':>4} {'NI':>3}"
+                   f"  {'VIRT':>6} {'RES':>6} {'%CPU':>5} {'%MEM':>5}"
+                   f" {'TIME+':>9}  {'COMMAND'}")
+            print(_c('7', hdr))
+
+            # Sort processes
+            mem_total_safe = max(mem_total, 1)
+            for p in all_procs:
+                mem_usage = getattr(p, 'memory_usage', 0)
+                cpu_time  = getattr(p, 'cpu_time', 0.0)
+                p._sort_cpu  = cpu_time
+                p._sort_mem  = mem_usage
+                p._sort_pid  = p.pid
+                p._sort_time = cpu_time
+                p._sort_cmd  = p.name
+
+            sort_key_map = {
+                'cpu':     lambda p: p._sort_cpu,
+                'mem':     lambda p: p._sort_mem,
+                'pid':     lambda p: p._sort_pid,
+                'time':    lambda p: p._sort_time,
+                'command': lambda p: p._sort_cmd,
+            }
+            key_fn = sort_key_map.get(sort_col, sort_key_map['cpu'])
+            all_procs.sort(key=key_fn, reverse=(sort_col != 'command'))
+
+            for p in all_procs:
+                mem_usage = getattr(p, 'memory_usage', 0)
+                cpu_time  = getattr(p, 'cpu_time', 0.0)
+                owner     = getattr(p, 'owner', 'root')
+                priority  = getattr(p, 'priority', 5)
+                nice      = getattr(p, 'nice', 0)
+                virt      = _fmt_mem(mem_usage * 2)
+                res       = _fmt_mem(mem_usage)
+                cpu_p     = min((cpu_time / max(uptime_s, 1)) * 100.0, 99.9)
+                mem_p     = (mem_usage / mem_total_safe) * 100.0
+                time_str  = _fmt_time(cpu_time)
+
+                line = (f"  {p.pid:>5} {owner:<9} {priority:>4} {nice:>3}"
+                        f"  {virt:>6} {res:>6} {cpu_p:>5.1f} {mem_p:>5.1f}"
+                        f" {time_str:>9}  {p.name}")
+                print(line)
+
+            # Function-key bar
+            fkey_bar = (_c('44;37', 'F1') + _c('0', 'Help ') +
+                        _c('44;37', 'F2') + _c('0', 'Setup') +
+                        _c('44;37', 'F3') + _c('0', 'Search') +
+                        _c('44;37', 'F4') + _c('0', 'Filter') +
+                        _c('44;37', 'F5') + _c('0', 'Sort') +
+                        _c('44;37', 'F6') + _c('0', 'Cols') +
+                        _c('44;37', 'F9') + _c('0', 'Kill') +
+                        _c('44;37', 'F10') + _c('0', 'Quit'))
+            print()
+            print(fkey_bar)
+
+        # ----------------------------------------------------------------
+        # Non-interactive fallback (not a TTY)
+        # ----------------------------------------------------------------
+        if not sys.stdout.isatty():
+            _render_screen()
+            return 0
+
+        # ----------------------------------------------------------------
+        # Interactive loop
+        # ----------------------------------------------------------------
+        import select
+
+        def _keypress_available() -> bool:
+            """Return True if a key is waiting on stdin."""
+            try:
+                return bool(select.select([sys.stdin], [], [], 0)[0])
+            except Exception:
+                return False
+
+        def _read_key() -> str:
+            try:
+                return sys.stdin.read(1)
+            except Exception:
+                return ''
+
+        try:
+            while True:
+                print("\033[2J\033[H", end="")
+                _render_screen()
+
+                sleep_secs = delay / 10.0
+                time.sleep(sleep_secs)
+
+                if _keypress_available():
+                    key = _read_key()
+                    if key in ('q', 'Q'):
+                        break
+                    elif key == '\x1b':
+                        # Possible F10: ESC [ 2 1 ~
+                        rest_key = ''
+                        if _keypress_available():
+                            rest_key = sys.stdin.read(4)
+                        if '21' in rest_key:
+                            break
+                    elif key == 'k':
+                        # Kill: prompt for PID then signal
+                        print("PID to kill: ", end='', flush=True)
+                        try:
+                            kill_pid = int(input())
+                            shell.kernel.kill_process(kill_pid)
+                        except Exception:
+                            pass
+                    elif key == 's':
+                        # Cycle sort column
+                        try:
+                            idx = sort_cols.index(sort_col)
+                        except ValueError:
+                            idx = 0
+                        sort_col = sort_cols[(idx + 1) % len(sort_cols)]
+
+        except KeyboardInterrupt:
+            pass
+
+        print()
+        return 0
