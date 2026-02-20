@@ -54,6 +54,15 @@ class Process:
     # Signal handling
     pending_signals: List[int] = field(default_factory=list)
     signal_handlers: Dict[int, Optional[Callable]] = field(default_factory=dict)
+    # Monitoring / metrics
+    user_time: float = 0.0
+    sys_time: float = 0.0
+    voluntary_ctx_switches: int = 0
+    nonvoluntary_ctx_switches: int = 0
+    read_bytes: int = 0
+    write_bytes: int = 0
+    syscall_count: int = 0
+    syscall_log: List[Tuple[str, float]] = field(default_factory=list)
 
 
 class MemoryManager:
