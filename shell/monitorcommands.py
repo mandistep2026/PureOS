@@ -5,6 +5,7 @@ Commands for system monitoring: memory, I/O, CPU statistics, and diagnostics.
 
 import time
 import sys
+import json
 from typing import List
 from core.metrics import MetricsCollector, HealthChecker, PerfProfiler
 

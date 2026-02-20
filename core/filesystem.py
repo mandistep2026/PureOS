@@ -305,6 +305,30 @@ class FileSystem:
         del self.inodes[path]
         return True
     
+    def get_io_rates(self) -> dict:
+        """Calculate I/O rates since last snapshot."""
+        now = time.time()
+        elapsed = now - self._last_snapshot_time
+        if elapsed < 0.001:
+            elapsed = 0.001  # Avoid division by zero
+
+        read_rate = (self.read_bytes_total - self._last_read_bytes) / elapsed
+        write_rate = (self.written_bytes_total - self._last_write_bytes) / elapsed
+
+        # Update snapshot
+        self._last_snapshot_time = now
+        self._last_read_bytes = self.read_bytes_total
+        self._last_write_bytes = self.written_bytes_total
+
+        return {
+            'read_bytes_per_sec': read_rate,
+            'write_bytes_per_sec': write_rate,
+            'total_reads': self.total_reads,
+            'total_writes': self.total_writes,
+            'read_bytes_total': self.read_bytes_total,
+            'written_bytes_total': self.written_bytes_total
+        }
+
     def list_directory(self, path: Optional[str] = None) -> Optional[List[Inode]]:
         """List contents of a directory."""
         if path is None:
