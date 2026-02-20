@@ -5067,3 +5067,586 @@ class LsofCommand(ShellCommand):
         if shown == 0:
             print("(no open files found)")
         return 0
+
+
+class ZipCommand(ShellCommand):
+    """Create a virtual zip archive."""
+
+    def __init__(self):
+        super().__init__("zip", "Create a virtual zip archive")
+
+    def execute(self, args: List[str], shell) -> int:
+        import json as _json
+        if len(args) < 2:
+            print("Usage: zip archive.zip file [file ...]")
+            return 1
+        archive_path = args[0]
+        file_paths = args[1:]
+        entries = {}
+        for fp in file_paths:
+            data = shell.fs.read_file(fp)
+            if data is None:
+                print(f"zip: {fp}: No such file or directory", file=sys.stderr)
+                return 1
+            entries[fp] = data.decode('latin-1', errors='replace')
+        payload = _json.dumps({"format": "pureos-zip", "entries": entries}).encode()
+        if not shell.fs.write_file(archive_path, payload):
+            print(f"zip: cannot create {archive_path}", file=sys.stderr)
+            return 1
+        print(f"  adding: {', '.join(file_paths)}")
+        print(f"Archive: {archive_path}  ({len(payload)} bytes)")
+        return 0
+
+
+class UnzipCommand(ShellCommand):
+    """Extract a virtual zip archive."""
+
+    def __init__(self):
+        super().__init__("unzip", "Extract a virtual zip archive")
+
+    def execute(self, args: List[str], shell) -> int:
+        import json as _json
+        dest_dir = "."
+        archive_path = None
+        i = 0
+        while i < len(args):
+            if args[i] == '-d' and i + 1 < len(args):
+                i += 1
+                dest_dir = args[i]
+            elif not args[i].startswith('-'):
+                archive_path = args[i]
+            i += 1
+        if not archive_path:
+            print("Usage: unzip [-d destdir] archive.zip")
+            return 1
+        data = shell.fs.read_file(archive_path)
+        if data is None:
+            print(f"unzip: cannot find or open {archive_path}", file=sys.stderr)
+            return 1
+        try:
+            payload = _json.loads(data.decode())
+            if payload.get("format") != "pureos-zip":
+                raise ValueError("not a pureos-zip")
+            entries = payload["entries"]
+        except Exception:
+            print(f"unzip: {archive_path}: not a valid zip archive", file=sys.stderr)
+            return 1
+        if dest_dir != ".":
+            shell.fs.mkdir(dest_dir, parents=True)
+        for name, content in entries.items():
+            import posixpath as _pp
+            basename = _pp.basename(name)
+            if dest_dir == ".":
+                out_path = shell.fs._normalize_path(
+                    shell.fs.current_directory + "/" + basename)
+            else:
+                out_path = shell.fs._normalize_path(dest_dir + "/" + basename)
+            shell.fs.write_file(out_path, content.encode('latin-1', errors='replace'))
+            print(f"  inflating: {out_path}")
+        return 0
+
+
+class DdCommand(ShellCommand):
+    """Convert and copy a file."""
+
+    def __init__(self):
+        super().__init__("dd", "Convert and copy a file")
+
+    def execute(self, args: List[str], shell) -> int:
+        params: Dict[str, str] = {}
+        for a in args:
+            if '=' in a:
+                k, v = a.split('=', 1)
+                params[k.strip()] = v.strip()
+        inf  = params.get('if')
+        outf = params.get('of')
+        bs   = int(params.get('bs', '512'))
+        count = params.get('count')
+        skip  = int(params.get('skip', '0'))
+
+        if inf:
+            data = shell.fs.read_file(inf)
+            if data is None:
+                print(f"dd: {inf}: No such file or directory", file=sys.stderr)
+                return 1
+        else:
+            try:
+                data = sys.stdin.read().encode()
+            except Exception:
+                data = b""
+
+        # Apply skip (in blocks)
+        data = data[skip * bs:]
+        # Apply count
+        if count is not None:
+            data = data[:int(count) * bs]
+
+        if outf:
+            shell.fs.write_file(outf, data)
+        else:
+            sys.stdout.buffer.write(data) if hasattr(sys.stdout, 'buffer') else sys.stdout.write(data.decode('latin-1', errors='replace'))
+
+        blocks = (len(data) + bs - 1) // bs if bs else 0
+        print(f"{blocks}+0 records in", file=sys.stderr)
+        print(f"{blocks}+0 records out", file=sys.stderr)
+        print(f"{len(data)} bytes copied", file=sys.stderr)
+        return 0
+
+
+class NlCommand(ShellCommand):
+    """Number lines of files."""
+
+    def __init__(self):
+        super().__init__("nl", "Number lines of files")
+
+    def execute(self, args: List[str], shell) -> int:
+        # Options
+        body_numbering = 'n'  # t=non-empty, a=all, n=none
+        start = 1
+        increment = 1
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-b',) and i + 1 < len(args):
+                i += 1
+                body_numbering = args[i]
+            elif args[i] in ('-v',) and i + 1 < len(args):
+                i += 1
+                try:
+                    start = int(args[i])
+                except ValueError:
+                    pass
+            elif args[i] in ('-i',) and i + 1 < len(args):
+                i += 1
+                try:
+                    increment = int(args[i])
+                except ValueError:
+                    pass
+            elif not args[i].startswith('-'):
+                filenames.append(args[i])
+            i += 1
+
+        def _number_lines(lines: List[str]) -> None:
+            n = start
+            for line in lines:
+                stripped = line.rstrip('\n')
+                if body_numbering == 'a' or (body_numbering != 'n' and stripped):
+                    print(f"{n:>6}\t{stripped}")
+                    n += increment
+                else:
+                    print(f"      \t{stripped}")
+
+        if filenames:
+            for fn in filenames:
+                data = shell.fs.read_file(fn)
+                if data is None:
+                    print(f"nl: {fn}: No such file or directory", file=sys.stderr)
+                    return 1
+                _number_lines(data.decode(errors='replace').splitlines(keepends=True))
+        else:
+            lines = sys.stdin.readlines()
+            _number_lines(lines)
+        return 0
+
+
+class OdCommand(ShellCommand):
+    """Dump files in octal and other formats."""
+
+    def __init__(self):
+        super().__init__("od", "Dump files in octal and other formats")
+
+    def execute(self, args: List[str], shell) -> int:
+        fmt = 'o'   # o=octal, x=hex, d=decimal, c=char
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-t',) and i + 1 < len(args):
+                i += 1
+                fmt = args[i][0] if args[i] else 'o'
+            elif args[i] == '-x':
+                fmt = 'x'
+            elif args[i] == '-c':
+                fmt = 'c'
+            elif args[i] == '-d':
+                fmt = 'd'
+            elif not args[i].startswith('-'):
+                filenames.append(args[i])
+            i += 1
+
+        if filenames:
+            data = b""
+            for fn in filenames:
+                d = shell.fs.read_file(fn)
+                if d is None:
+                    print(f"od: {fn}: No such file or directory", file=sys.stderr)
+                    return 1
+                data += d
+        else:
+            data = sys.stdin.read().encode()
+
+        offset = 0
+        while offset < len(data):
+            chunk = data[offset:offset+16]
+            addr = f"{offset:07o}"
+            if fmt == 'x':
+                values = ' '.join(f"{b:02x}" for b in chunk)
+            elif fmt == 'd':
+                values = ' '.join(f"{b:3d}" for b in chunk)
+            elif fmt == 'c':
+                values = ' '.join(chr(b) if 32 <= b < 127 else f"\\{b:03o}" for b in chunk)
+            else:  # octal default
+                values = ' '.join(f"{b:03o}" for b in chunk)
+            print(f"{addr}  {values}")
+            offset += 16
+        print(f"{offset:07o}")
+        return 0
+
+
+class XxdCommand(ShellCommand):
+    """Make a hex dump or reverse."""
+
+    def __init__(self):
+        super().__init__("xxd", "Make a hexdump or do the reverse")
+
+    def execute(self, args: List[str], shell) -> int:
+        reverse = '-r' in args or '--reverse' in args
+        cols = 16
+        filenames = [a for a in args if not a.startswith('-')]
+
+        if filenames:
+            data = shell.fs.read_file(filenames[0])
+            if data is None:
+                print(f"xxd: {filenames[0]}: No such file or directory", file=sys.stderr)
+                return 1
+        else:
+            data = sys.stdin.read().encode()
+
+        if reverse:
+            # reverse mode: parse hex dump back to binary
+            import re as _re
+            result = b""
+            for line in data.decode(errors='replace').splitlines():
+                m = _re.match(r'[0-9a-f]+:\s+((?:[0-9a-f]{2}\s*)+)', line)
+                if m:
+                    hex_part = m.group(1).replace(' ', '')
+                    try:
+                        result += bytes.fromhex(hex_part)
+                    except Exception:
+                        pass
+            sys.stdout.write(result.decode('latin-1', errors='replace'))
+        else:
+            offset = 0
+            while offset < len(data):
+                chunk = data[offset:offset+cols]
+                hex_part = ' '.join(f"{b:02x}" for b in chunk)
+                # pad to fill cols * 3 - 1
+                hex_part = hex_part.ljust(cols * 3 - 1)
+                ascii_part = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
+                print(f"{offset:08x}: {hex_part}  {ascii_part}")
+                offset += cols
+        return 0
+
+
+class NohupCommand(ShellCommand):
+    """Run a command immune to hangups."""
+
+    def __init__(self):
+        super().__init__("nohup", "Run a command immune to hangups, with output to nohup.out")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: nohup command [args ...]")
+            return 1
+        cmd_line = ' '.join(args)
+        # Redirect stdout to nohup.out
+        nohup_path = shell.fs._normalize_path(
+            shell.environment.get("HOME", "/root") + "/nohup.out")
+        old_stdout = sys.stdout
+        captured = StringIO()
+        sys.stdout = captured
+        rc = 0
+        try:
+            rc = shell.execute(cmd_line, save_to_history=False)
+        except Exception:
+            rc = 1
+        finally:
+            sys.stdout = old_stdout
+        output = captured.getvalue()
+        # Append to nohup.out
+        existing = shell.fs.read_file(nohup_path) or b""
+        shell.fs.write_file(nohup_path, existing + output.encode())
+        print(f"nohup: appending output to '{nohup_path}'")
+        return rc
+
+
+class MountCommand(ShellCommand):
+    """Mount a virtual filesystem."""
+
+    _mount_table: Dict[str, str] = {}  # mountpoint -> device
+
+    def __init__(self):
+        super().__init__("mount", "Mount a filesystem")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            # List mounts
+            default_mounts = [
+                ("pureos-rootfs", "/",    "pureos", "rw"),
+                ("tmpfs",         "/tmp", "tmpfs",  "rw"),
+                ("proc",          "/proc","proc",   "ro"),
+                ("devfs",         "/dev", "devfs",  "rw"),
+            ]
+            for dev, mp, fstype, opts in default_mounts:
+                print(f"{dev} on {mp} type {fstype} ({opts})")
+            for mp, dev in MountCommand._mount_table.items():
+                print(f"{dev} on {mp} type virtualfs (rw)")
+            return 0
+
+        if len(args) < 2:
+            print("Usage: mount <device> <mountpoint>")
+            return 1
+
+        device, mountpoint = args[0], args[1]
+        # Create mountpoint directory if needed
+        if not shell.fs.exists(mountpoint):
+            shell.fs.mkdir(mountpoint, parents=True)
+        MountCommand._mount_table[mountpoint] = device
+        print(f"Mounted {device} on {mountpoint}")
+        return 0
+
+
+class UmountCommand(ShellCommand):
+    """Unmount a virtual filesystem."""
+
+    def __init__(self):
+        super().__init__("umount", "Unmount a filesystem")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: umount <mountpoint>")
+            return 1
+        mountpoint = args[0]
+        if mountpoint in MountCommand._mount_table:
+            del MountCommand._mount_table[mountpoint]
+            print(f"Unmounted {mountpoint}")
+            return 0
+        print(f"umount: {mountpoint}: not mounted", file=sys.stderr)
+        return 1
+
+
+class ColumnCommand(ShellCommand):
+    """Format input into columns."""
+
+    def __init__(self):
+        super().__init__("column", "Format input into multiple columns")
+
+    def execute(self, args: List[str], shell) -> int:
+        separator = None
+        table_mode = '-t' in args or '--table' in args
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-s', '--separator') and i + 1 < len(args):
+                i += 1
+                separator = args[i]
+            elif args[i] == '-t' or args[i] == '--table':
+                pass
+            elif not args[i].startswith('-'):
+                filenames.append(args[i])
+            i += 1
+
+        lines: List[str] = []
+        if filenames:
+            for fn in filenames:
+                data = shell.fs.read_file(fn)
+                if data is None:
+                    print(f"column: {fn}: No such file or directory", file=sys.stderr)
+                    return 1
+                lines.extend(data.decode(errors='replace').splitlines())
+        else:
+            lines = [l.rstrip('\n') for l in sys.stdin.readlines()]
+
+        if not lines:
+            return 0
+
+        if table_mode:
+            # Split each line into fields and align columns
+            rows = []
+            for line in lines:
+                if separator:
+                    fields = line.split(separator)
+                else:
+                    fields = line.split()
+                rows.append(fields)
+            if not rows:
+                return 0
+            ncols = max(len(r) for r in rows)
+            widths = [0] * ncols
+            for row in rows:
+                for j, field in enumerate(row):
+                    widths[j] = max(widths[j], len(field))
+            for row in rows:
+                parts = []
+                for j in range(ncols):
+                    val = row[j] if j < len(row) else ""
+                    if j < ncols - 1:
+                        parts.append(val.ljust(widths[j]))
+                    else:
+                        parts.append(val)
+                print("  ".join(parts))
+        else:
+            # Multi-column output (like `ls` style)
+            if not lines:
+                return 0
+            try:
+                term_width = 80
+            except Exception:
+                term_width = 80
+            max_len = max(len(l) for l in lines) + 2
+            ncols = max(1, term_width // max_len)
+            nrows = (len(lines) + ncols - 1) // ncols
+            for r in range(nrows):
+                row_parts = []
+                for c in range(ncols):
+                    idx = r + c * nrows
+                    if idx < len(lines):
+                        row_parts.append(lines[idx].ljust(max_len))
+                print("".join(row_parts).rstrip())
+        return 0
+
+
+class StraceCommand(ShellCommand):
+    """Trace system calls (simulated)."""
+
+    def __init__(self):
+        super().__init__("strace", "Trace system calls and signals (simulated)")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: strace command [args ...]")
+            return 1
+
+        # Filter out strace options
+        cmd_args = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-e', '-p', '-o', '-s') and i + 1 < len(args):
+                i += 2
+                continue
+            if args[i].startswith('-'):
+                i += 1
+                continue
+            cmd_args.append(args[i])
+            i += 1
+
+        if not cmd_args:
+            print("strace: must specify a command to trace")
+            return 1
+
+        cmd_line = ' '.join(cmd_args)
+        # Simulated syscall trace
+        import time as _time
+        simulated_calls = [
+            'execve("{cmd}", ["{cmd}"], envp) = 0'.format(cmd=cmd_args[0]),
+            'brk(NULL)                           = 0x55a000',
+            'mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7f0000',
+            'open("/etc/ld.so.cache", O_RDONLY)  = 3',
+            'fstat(3, {st_mode=S_IFREG, st_size=128}) = 0',
+            'mmap(NULL, 128, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7f1000',
+            'close(3)                            = 0',
+            'open("/lib/libc.so.6", O_RDONLY)    = 3',
+            'read(3, "\\x7fELF...", 832)           = 832',
+            'close(3)                            = 0',
+            'write(1, ..., ...) = ...',
+        ]
+        for call in simulated_calls:
+            print(call, file=sys.stderr)
+            _time.sleep(0.01)
+
+        rc = shell.execute(cmd_line, save_to_history=False)
+        import os as _os
+        print(f"+++ exited with {rc} +++", file=sys.stderr)
+        return rc
+
+
+class InstallCommand(ShellCommand):
+    """Copy files and set attributes (like GNU install)."""
+
+    def __init__(self):
+        super().__init__("install", "Copy files and set attributes")
+
+    def execute(self, args: List[str], shell) -> int:
+        mode = "755"
+        owner = None
+        group = None
+        make_dir = False
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-m', '--mode') and i + 1 < len(args):
+                i += 1
+                mode = args[i]
+            elif args[i].startswith('-m'):
+                mode = args[i][2:]
+            elif args[i] in ('-o', '--owner') and i + 1 < len(args):
+                i += 1
+                owner = args[i]
+            elif args[i] in ('-g', '--group') and i + 1 < len(args):
+                i += 1
+                group = args[i]
+            elif args[i] in ('-d', '--directory'):
+                make_dir = True
+            elif not args[i].startswith('-'):
+                filenames.append(args[i])
+            i += 1
+
+        if make_dir:
+            for d in filenames:
+                shell.fs.mkdir(d, parents=True)
+                if owner:
+                    shell.fs.chown(d, owner, group)
+                print(f"install: created directory '{d}'")
+            return 0
+
+        if len(filenames) < 2:
+            print("Usage: install [options] source dest")
+            return 1
+
+        sources = filenames[:-1]
+        dest = filenames[-1]
+
+        for src in sources:
+            data = shell.fs.read_file(src)
+            if data is None:
+                print(f"install: cannot stat '{src}': No such file or directory", file=sys.stderr)
+                return 1
+            import posixpath as _pp
+            if shell.fs.is_directory(dest):
+                target = shell.fs._normalize_path(dest + "/" + _pp.basename(src))
+            else:
+                target = shell.fs._normalize_path(dest)
+            shell.fs.write_file(target, data)
+            # Apply mode
+            try:
+                octal_val = int(mode, 8)
+                perm_map = {4: 'r', 2: 'w', 1: 'x'}
+                perm_str = ""
+                for shift in (6, 3, 0):
+                    bits = (octal_val >> shift) & 0o7
+                    perm_str += perm_map.get(4 if bits & 4 else 0, '-')
+                    perm_str += perm_map.get(2 if bits & 2 else 0, '-')
+                    perm_str += perm_map.get(1 if bits & 1 else 0, '-')
+                # Fix: rebuild properly
+                perm_str = ""
+                for shift in (6, 3, 0):
+                    bits = (octal_val >> shift) & 0o7
+                    perm_str += ('r' if bits & 4 else '-')
+                    perm_str += ('w' if bits & 2 else '-')
+                    perm_str += ('x' if bits & 1 else '-')
+                shell.fs.chmod(target, perm_str)
+            except ValueError:
+                shell.fs.chmod(target, "rwxr-xr-x")
+            if owner:
+                shell.fs.chown(target, owner, group)
+            print(f"install: '{src}' -> '{target}'")
+        return 0
