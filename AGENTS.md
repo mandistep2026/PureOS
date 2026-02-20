@@ -1,1 +1,1 @@
-Always write git commit after each edits made to any file
+Always do git commit after each edits made to any file
