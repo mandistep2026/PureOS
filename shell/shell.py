@@ -751,10 +751,11 @@ class Shell:
         """Run the shell interactively."""
         self.running = True
 
-        print("PureOS Shell v1.4")
+        print("PureOS Shell v1.7")
         print("Type 'help' for available commands")
         print("Use '!!' to repeat last command, '!n' to run command #n")
         print("Use 'command &' for background, 'jobs', 'fg', 'bg' for job control")
+        print("Use 'cmd1 | cmd2' for pipes, 'cmd < file' for stdin redirection")
         print("Press Tab for completion, Ctrl+A/E for line editing")
         print()
 
