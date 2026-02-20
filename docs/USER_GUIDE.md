@@ -698,6 +698,7 @@ hostname                          # Show or set the system hostname
 traceroute 8.8.8.8                # Trace route to host
 dig google.com                    # DNS lookup
 nslookup cloudflare.com           # DNS name resolution
+resolvectl                         # Show DNS resolver status
 ```
 
 #### Fetching URLs
