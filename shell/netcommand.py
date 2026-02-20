@@ -251,9 +251,9 @@ class IpCommand(ShellCommand):
         return f"fe80::{parts[2]}:{parts[3]}ff:fe00:0000/64"
 
     def show_links(self, shell, args: List) -> int:
-        for iface in self.nm.list_interfaces():
+        for idx, iface in enumerate(self.nm.list_interfaces(), start=1):
             state = "UP" if iface.state.value == "up" else "DOWN"
-            shell.print(f"{iface.index}: {iface.name} <{state},BROADCAST,MULTICAST,UP,LOWER_UP> mtu {iface.mtu} qdisc pfifo_fast state {state} mode DEFAULT")
+            shell.print(f"{idx}: {iface.name} <{state},BROADCAST,MULTICAST,UP,LOWER_UP> mtu {iface.mtu} qdisc pfifo_fast state {state} mode DEFAULT")
             shell.print(f"    link/{'ether' if iface.name != 'lo' else 'loopback'} {iface.mac_address} brd ff:ff:ff:ff:ff:ff")
         return 0
 
