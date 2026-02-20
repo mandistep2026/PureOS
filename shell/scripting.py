@@ -533,10 +533,68 @@ class ScriptExecutor:
         return exit_code
     
     def _execute_case(self, tokens: List[Token]) -> int:
-        """Execute case statement."""
-        # Format: case word in pattern) commands ;; esac
-        print("bash: case statement not yet fully implemented")
-        return 0
+        """Execute case statement.
+        Format: case WORD in
+                  pattern1) cmd1 ;; pattern2) cmd2 ;; *) default ;;
+                esac
+        """
+        import fnmatch as _fnmatch
+
+        if len(tokens) < 4:
+            print("bash: syntax error in case statement")
+            return 1
+
+        # tokens[0] = 'case', tokens[1] = word, tokens[2] = 'in', ..., last = 'esac'
+        word = self.vars.expand(tokens[1].value)
+
+        # Find 'in' and 'esac'
+        in_idx = None
+        esac_idx = None
+        for i, t in enumerate(tokens):
+            if t.value == 'in' and in_idx is None:
+                in_idx = i
+            elif t.value == 'esac':
+                esac_idx = i
+
+        if in_idx is None or esac_idx is None:
+            print("bash: syntax error: missing 'in' or 'esac'")
+            return 1
+
+        body_tokens = tokens[in_idx + 1:esac_idx]
+
+        # Reconstruct body as a string and parse pattern) … ;; blocks
+        body_str = ' '.join(t.value for t in body_tokens)
+
+        # Split on ';;'
+        clauses = body_str.split(';;')
+        exit_code = 0
+
+        for clause in clauses:
+            clause = clause.strip()
+            if not clause:
+                continue
+            # Split on first ')'
+            paren_idx = clause.find(')')
+            if paren_idx == -1:
+                continue
+            patterns_str = clause[:paren_idx].strip()
+            cmd_str = clause[paren_idx + 1:].strip()
+
+            # Multiple patterns separated by |
+            patterns = [p.strip() for p in patterns_str.split('|')]
+            matched = False
+            for pat in patterns:
+                pat_expanded = self.vars.expand(pat)
+                if pat_expanded == '*' or _fnmatch.fnmatch(word, pat_expanded):
+                    matched = True
+                    break
+
+            if matched:
+                if cmd_str:
+                    exit_code = self.shell.execute(cmd_str, save_to_history=False)
+                break
+
+        return exit_code
     
     def _execute_function_def(self, tokens: List[Token]) -> int:
         """Define a function."""
