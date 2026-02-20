@@ -4319,7 +4319,7 @@ class AwkCommand(ShellCommand):
                                 expanded.append(token[1:-1])
                             else:
                                 expanded.append(expand_vars(token))
-                        print(env['OFS'].join(expanded))
+                        print(env['OFS'].join(expanded) + env['ORS'], end='')
                     continue
                 # printf "fmt", args
                 m = _re.match(r'^printf\s+"([^"]*)"(.*)', stmt)
