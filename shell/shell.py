@@ -4210,10 +4210,14 @@ class AwkCommand(ShellCommand):
                     if not expr:
                         print(env['$0'])
                     else:
-                        parts = [p.strip().strip('"') for p in expr.split(',')]
+                        parts = [p.strip() for p in expr.split(',')]
                         expanded = []
                         for p in parts:
-                            expanded.append(expand_vars(p))
+                            token = p.strip()
+                            if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+                                expanded.append(token[1:-1])
+                            else:
+                                expanded.append(expand_vars(token))
                         print(env['OFS'].join(expanded))
                     continue
                 # printf "fmt", args
