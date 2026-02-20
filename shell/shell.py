@@ -71,6 +71,8 @@ class Shell:
         # Foreground job tracking
         self.foreground_job = None
         self.foreground_job_id = None
+        # Here-doc line buffer (used by scripting engine)
+        self._heredoc_lines: List[str] = []
         # Line editor for advanced input
         self.line_editor = None
         try:
