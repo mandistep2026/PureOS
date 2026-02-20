@@ -2195,19 +2195,19 @@ class SortCommand(ShellCommand):
             else:
                 filenames.append(arg)
 
-        if not filenames:
-            print("sort: missing file operand")
-            return 1
-
         all_lines: List[str] = []
 
-        for filename in filenames:
-            content = shell.fs.read_file(filename)
-            if content is None:
-                print(f"sort: cannot read '{filename}': No such file or directory")
-                return 1
-            lines = content.decode('utf-8', errors='replace').splitlines()
-            all_lines.extend(lines)
+        if not filenames:
+            # Read from stdin
+            all_lines = sys.stdin.read().splitlines()
+        else:
+            for filename in filenames:
+                content = shell.fs.read_file(filename)
+                if content is None:
+                    print(f"sort: cannot read '{filename}': No such file or directory")
+                    return 1
+                lines = content.decode('utf-8', errors='replace').splitlines()
+                all_lines.extend(lines)
 
         sorted_lines = sorted(all_lines, reverse=reverse)
         if unique:
