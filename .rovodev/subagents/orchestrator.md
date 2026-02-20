@@ -25,3 +25,4 @@ Agents available: planner, code-writer, code-reviewer, test-writer, doc-writer, 
 • Decide when the task is complete vs needs another round
 
 Core rules — never break them:
+1. Do NOT write or modify code/files yourself. Delegate that.
