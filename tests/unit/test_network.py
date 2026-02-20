@@ -443,6 +443,80 @@ class TestPingCommand(BaseTestCase):
         # but more importantly: the flag parser should not crash.
         self.assertIn(rc, (0, 1), "ping -t <missing> should return a valid exit code.")
 
+    def test_t_flag_zero_emits_correct_result_line_count(self):
+        """-t 0 should still emit exactly the default count of result lines."""
+        self._execute(["-t", "0", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertEqual(
+            len(result_lines),
+            4,
+            "ping -t 0 with default count should emit 4 result lines.",
+        )
+
+    def test_t_flag_zero_all_result_lines_show_failed(self):
+        """-t 0 should mark every result line as FAILED."""
+        self._execute(["-t", "0", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertTrue(
+            all("FAILED" in line for line in result_lines),
+            "All result lines should show FAILED when timeout=0.",
+        )
+
+    def test_t_flag_large_all_result_lines_show_ok(self):
+        """-t 9999 should mark every result line as OK."""
+        self._execute(["-t", "9999", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertTrue(
+            all("OK" in line for line in result_lines),
+            "All result lines should show OK when timeout is very large.",
+        )
+
+    def test_output_contains_ttl_field(self):
+        """Each result line should include the ttl= field."""
+        self._execute(["-c", "1", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertTrue(
+            all("ttl=" in line for line in result_lines),
+            "Each result line must include a ttl= field.",
+        )
+
+    def test_output_contains_time_field(self):
+        """Each result line should include the time= field."""
+        self._execute(["-c", "1", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertTrue(
+            all("time=" in line for line in result_lines),
+            "Each result line must include a time= field.",
+        )
+
+    def test_output_packet_loss_zero_on_large_timeout(self):
+        """Statistics line should report 0% packet loss when all packets succeed."""
+        self._execute(["-c", "2", "-t", "9999", "8.8.8.8"])
+        self.assertTrue(
+            any("0% packet loss" in line for line in self.shell.output),
+            "Statistics should report 0% packet loss when all packets succeed.",
+        )
+
+    def test_output_packet_loss_100_on_zero_timeout(self):
+        """Statistics line should report 100% packet loss when all packets fail."""
+        self._execute(["-c", "2", "-t", "0", "8.8.8.8"])
+        self.assertTrue(
+            any("100% packet loss" in line for line in self.shell.output),
+            "Statistics should report 100% packet loss when all packets fail.",
+        )
+
+    def test_t_and_c_combined_zero_timeout_returns_error(self):
+        """-c 1 -t 0 combination: exactly 1 result line and exit code 1."""
+        rc = self._execute(["-c", "1", "-t", "0", "8.8.8.8"])
+        result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
+        self.assertEqual(len(result_lines), 1, "-c 1 should emit exactly 1 result line.")
+        self.assertEqual(rc, 1, "Exit code should be 1 when all packets fail.")
+
+    def test_ping_localhost_with_large_timeout_returns_zero(self):
+        """ping localhost -t 9999 should return 0."""
+        rc = self._execute(["-t", "9999", "127.0.0.1"])
+        self.assertEqual(rc, 0, "ping 127.0.0.1 -t 9999 should return 0.")
+
     def test_t_and_c_flags_together(self):
         """-c and -t flags can be combined; result count must match -c value."""
         self._execute(["-c", "2", "-t", "9999", "8.8.8.8"])
