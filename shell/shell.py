@@ -4022,8 +4022,16 @@ class SedCommand(ShellCommand):
             start, end, body = parse_command(cmd)
             parsed_commands.append((start, end, body))
 
-        for lineno, line in enumerate(lines, 1):
+        line_idx = 0
+        while line_idx < len(lines):
+            line = lines[line_idx]
+            lineno = line_idx + 1
             delete = False
+            insert_before: List[str] = []
+            append_after: List[str] = []
+            force_print = False
+            restart_cycle = False
+
             for idx, (start, end, body) in enumerate(parsed_commands):
                 if not body:
                     continue
@@ -4044,6 +4052,7 @@ class SedCommand(ShellCommand):
                     continue
 
                 op = body[0]
+                payload = body[1:].lstrip() if len(body) > 1 else ''
 
                 if op == 's':
                     # s/pattern/replacement/flags
@@ -4079,9 +4088,40 @@ class SedCommand(ShellCommand):
                         src_chars, dst_chars = parts[0], parts[1]
                         table = str.maketrans(src_chars, dst_chars[:len(src_chars)])
                         line = line.translate(table)
+                elif op == 'i':
+                    insert_before.append(payload)
+                elif op == 'a':
+                    append_after.append(payload)
+                elif op == 'c':
+                    line = payload
+                    force_print = True
+                    append_after = []
+                    insert_before = []
+                    break
+                elif op == 'n':
+                    if not silent:
+                        output_lines.append(line)
+                    output_lines.extend(append_after)
+                    append_after = []
+                    line_idx += 1
+                    if line_idx >= len(lines):
+                        delete = True
+                        break
+                    line = lines[line_idx]
+                    lineno = line_idx + 1
+                    restart_cycle = True
+                    break
 
-            if not delete and not silent:
-                output_lines.append(line)
+            if restart_cycle:
+                continue
+
+            if not delete:
+                output_lines.extend(insert_before)
+                if not silent or force_print:
+                    output_lines.append(line)
+                output_lines.extend(append_after)
+
+            line_idx += 1
 
         for ol in output_lines:
             print(ol)
