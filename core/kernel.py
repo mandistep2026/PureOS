@@ -21,6 +21,19 @@ class ProcessState(Enum):
     TERMINATED = "terminated"
 
 
+class Signal(Enum):
+    SIGHUP  = 1   # Hangup
+    SIGINT  = 2   # Interrupt
+    SIGQUIT = 3   # Quit
+    SIGKILL = 9   # Kill (cannot be caught)
+    SIGUSR1 = 10  # User-defined 1
+    SIGUSR2 = 12  # User-defined 2
+    SIGTERM = 15  # Termination
+    SIGCONT = 18  # Continue
+    SIGSTOP = 19  # Stop (cannot be caught)
+    SIGTSTP = 20  # Terminal stop
+
+
 @dataclass
 class Process:
     """Represents a process in the system."""
