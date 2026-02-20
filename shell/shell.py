@@ -1784,7 +1784,7 @@ class GrepCommand(ShellCommand):
                 positional.append(arg)
             i += 1
 
-        if len(positional) < 2:
+        if not positional:
             print("Usage: grep [-i] [-n] [-v] <pattern> <file...>")
             return 1
 
@@ -1794,6 +1794,22 @@ class GrepCommand(ShellCommand):
 
         match_pattern = pattern.lower() if ignore_case else pattern
         multiple_files = len(filenames) > 1
+
+        # Read from stdin if no files given
+        if not filenames:
+            stdin_text = sys.stdin.read()
+            stdin_lines = stdin_text.splitlines()
+            for line_number, line in enumerate(stdin_lines, 1):
+                candidate = line.lower() if ignore_case else line
+                is_match = match_pattern in candidate
+                if invert_match:
+                    is_match = not is_match
+                if not is_match:
+                    continue
+                prefix = f"{line_number}:" if show_line_numbers else ""
+                print(f"{prefix}{line}")
+                found = True
+            return 0 if found else 1
 
         for filename in filenames:
             content = shell.fs.read_file(filename)
