@@ -1985,8 +1985,7 @@ class UnsetCommand(ShellCommand):
 
     def execute(self, args: List[str], shell) -> int:
         if not args:
-            print("unset: usage: unset <name> [...]")
-            return 1
+            return 0
 
         status = 0
         for name in args:
