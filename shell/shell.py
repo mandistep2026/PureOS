@@ -646,6 +646,10 @@ class Shell:
             self.history.append(stripped)
             self.history_position = len(self.history)
 
+        # Handle case..esac statements
+        if stripped.startswith('case ') and 'esac' in stripped:
+            return self._execute_case(stripped)
+
         # Handle boolean chains (&& / ||) before pipes
         bool_segments, bool_ops = self._split_boolean_chains(stripped)
         if len(bool_segments) > 1:
