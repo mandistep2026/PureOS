@@ -480,3 +480,226 @@ class SysdiagCommand(ShellCommand):
 
         # Return 1 if any CRIT, 0 otherwise
         return 1 if crit_count > 0 else 0
+
+
+class SyshealthCommand(ShellCommand):
+    """System health dashboard."""
+
+    def __init__(self):
+        super().__init__("syshealth", "Display PureOS system health dashboard")
+
+    def execute(self, args: List[str], shell) -> int:
+        brief    = '--brief' in args
+        as_json  = '--json'  in args
+        watch    = '--watch' in args
+        show_cpu = '--cpu'   in args
+        show_mem = '--mem'   in args
+        show_disk = '--disk' in args
+        show_net = '--net'   in args
+        show_svc = '--svc'   in args
+
+        # If no section flags given, show all sections
+        any_section = show_cpu or show_mem or show_disk or show_net or show_svc
+        if not any_section:
+            show_cpu = show_mem = show_disk = show_net = show_svc = True
+
+        # Build subsystem objects
+        try:
+            init_sys = getattr(shell.kernel, 'init_system', None)
+            net_mgr  = getattr(shell, 'network_manager', None)
+            collector = MetricsCollector(
+                shell.kernel, shell.fs,
+                network_manager=net_mgr,
+                init_system=init_sys,
+            )
+            checker = HealthChecker(
+                collector, shell.kernel, shell.fs,
+                init_system=init_sys,
+            )
+        except Exception as e:
+            print(f"syshealth: unable to initialise metrics: {e}")
+            return 1
+
+        def _progress_bar(pct: float, width: int = 20) -> str:
+            filled = int(round(pct / 100.0 * width))
+            filled = max(0, min(width, filled))
+            return '█' * filled + '░' * (width - filled)
+
+        def _status_tag(status: str) -> str:
+            s = status.upper()
+            if s == 'CRIT':
+                return '[CRIT]'
+            if s == 'WARN':
+                return '[WARN]'
+            return '[OK]'
+
+        def _collect_data():
+            hostname = shell.environment.get('HOSTNAME', 'pureos')
+            uptime_s = shell.kernel.get_uptime()
+            h = int(uptime_s // 3600)
+            m = int((uptime_s % 3600) // 60)
+            s = int(uptime_s % 60)
+            uptime_str = f"{h}h {m}m {s}s"
+            now_str = time.strftime('%Y-%m-%d %H:%M:%S')
+
+            mem_snap  = collector.get_memory_snapshot()
+            cpu_snap  = collector.get_cpu_snapshot()
+            disk_snap = collector.get_disk_snapshot()
+            net_snap  = collector.get_network_snapshot()
+            svc_snap  = collector.get_service_snapshot()
+
+            cpu_pct  = cpu_snap.get('user_pct', 0.0) + cpu_snap.get('sys_pct', 0.0)
+            mem_total = mem_snap['total']
+            mem_used  = mem_snap['used']
+            mem_pct   = (mem_used / max(mem_total, 1)) * 100.0
+            swap_total = mem_snap['swap_total']
+            swap_used  = mem_snap['swap_used']
+            swap_pct   = (swap_used / max(swap_total, 1)) * 100.0
+            disk_pct   = disk_snap['used_pct']
+
+            # Network: first interface, or zeros
+            net_ifaces = net_snap.get('interfaces', [])
+            if net_ifaces:
+                iface = net_ifaces[0]
+                net_name = iface['name']
+                net_tx   = iface.get('tx_kb_per_sec', 0.0)
+                net_rx   = iface.get('rx_kb_per_sec', 0.0)
+            else:
+                net_name, net_tx, net_rx = 'eth0', 0.0, 0.0
+
+            active_svcs = sum(1 for s in svc_snap if s.get('state') == 'running')
+            failed_svcs = sum(1 for s in svc_snap if s.get('state') == 'failed')
+
+            # Health statuses
+            _, cpu_msg  = checker.check_memory_pressure()   # proxy
+            cpu_status  = 'OK' if cpu_pct < 80 else ('WARN' if cpu_pct < 95 else 'CRIT')
+            mem_st, _   = checker.check_memory_pressure()
+            swap_st, _  = checker.check_swap_usage()
+            disk_st, _  = checker.check_filesystem_usage()
+            svc_st, _   = checker.check_service_health()
+            net_status  = 'OK'
+
+            return {
+                'hostname': hostname,
+                'uptime': uptime_str,
+                'now': now_str,
+                'cpu_pct': round(cpu_pct, 1),
+                'cpu_status': cpu_status,
+                'mem_pct': round(mem_pct, 1),
+                'mem_status': mem_st,
+                'swap_pct': round(swap_pct, 1),
+                'swap_status': swap_st,
+                'disk_pct': round(disk_pct, 1),
+                'disk_status': disk_st,
+                'net_name': net_name,
+                'net_tx': net_tx,
+                'net_rx': net_rx,
+                'net_status': net_status,
+                'active_svcs': active_svcs,
+                'failed_svcs': failed_svcs,
+                'svc_status': svc_st,
+            }
+
+        def _print_dashboard(d):
+            W = 54  # inner width
+            border_top    = '╔' + '═' * W + '╗'
+            border_mid    = '╠' + '═' * W + '╣'
+            border_bottom = '╚' + '═' * W + '╝'
+
+            def row(text):
+                # Pad/truncate to exactly W chars
+                text = text[:W]
+                print('║' + text.ljust(W) + '║')
+
+            print(border_top)
+            row('         PureOS System Health Dashboard               ')
+            row(f"  {d['hostname']} | uptime: {d['uptime']} | {d['now']}  ")
+            print(border_mid)
+
+            if show_cpu:
+                bar = _progress_bar(d['cpu_pct'])
+                tag = _status_tag(d['cpu_status'])
+                row(f" CPU      {bar}  {d['cpu_pct']:5.1f}%  {tag}          ")
+
+            if show_mem:
+                bar = _progress_bar(d['mem_pct'])
+                tag = _status_tag(d['mem_status'])
+                row(f" Memory   {bar}  {d['mem_pct']:5.1f}%  {tag}          ")
+                bar = _progress_bar(d['swap_pct'])
+                tag = _status_tag(d['swap_status'])
+                row(f" Swap     {bar}  {d['swap_pct']:5.1f}%  {tag}          ")
+
+            if show_disk:
+                bar = _progress_bar(d['disk_pct'])
+                tag = _status_tag(d['disk_status'])
+                row(f" Disk     {bar}  {d['disk_pct']:5.1f}%  {tag}          ")
+
+            if show_net:
+                tag = _status_tag(d['net_status'])
+                net_str = (f" Network  {d['net_name']} "
+                           f"\u2191{d['net_tx']:.1f}KB/s "
+                           f"\u2193{d['net_rx']:.1f}KB/s      {tag}          ")
+                row(net_str)
+
+            if show_svc:
+                tag = _status_tag(d['svc_status'])
+                svc_str = (f" Services {d['active_svcs']} active, "
+                           f"{d['failed_svcs']} failed           {tag}          ")
+                row(svc_str)
+
+            print(border_bottom)
+
+        def _print_brief(d):
+            lines = []
+            if show_cpu:
+                lines.append(f"CPU: {d['cpu_pct']}% {_status_tag(d['cpu_status'])}")
+            if show_mem:
+                lines.append(f"Mem: {d['mem_pct']}% {_status_tag(d['mem_status'])}")
+                lines.append(f"Swap: {d['swap_pct']}% {_status_tag(d['swap_status'])}")
+            if show_disk:
+                lines.append(f"Disk: {d['disk_pct']}% {_status_tag(d['disk_status'])}")
+            if show_net:
+                lines.append(
+                    f"Net: {d['net_name']} "
+                    f"\u2191{d['net_tx']:.1f}KB/s \u2193{d['net_rx']:.1f}KB/s "
+                    f"{_status_tag(d['net_status'])}"
+                )
+            if show_svc:
+                lines.append(
+                    f"Svc: {d['active_svcs']} active, "
+                    f"{d['failed_svcs']} failed {_status_tag(d['svc_status'])}"
+                )
+            print('  '.join(lines))
+
+        def _print_json(d):
+            print(json.dumps(d, indent=2))
+
+        def _render(d):
+            if as_json:
+                _print_json(d)
+            elif brief:
+                _print_brief(d)
+            else:
+                _print_dashboard(d)
+
+        def _any_crit(d):
+            for key in ('cpu_status', 'mem_status', 'swap_status',
+                        'disk_status', 'net_status', 'svc_status'):
+                if d.get(key, '').upper() == 'CRIT':
+                    return True
+            return False
+
+        if watch:
+            try:
+                while True:
+                    print("\033[2J\033[H", end="")
+                    d = _collect_data()
+                    _render(d)
+                    time.sleep(3)
+            except KeyboardInterrupt:
+                print()
+            return 0
+        else:
+            d = _collect_data()
+            _render(d)
+            return 1 if _any_crit(d) else 0
