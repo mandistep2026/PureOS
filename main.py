@@ -636,6 +636,44 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 20: Grep command options
+        print("Test 20: Grep command options...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo Alpha > /tmp/grep_a.txt") == 0
+            assert shell.execute("echo beta >> /tmp/grep_a.txt") == 0
+            assert shell.execute("echo ALPHA >> /tmp/grep_a.txt") == 0
+            assert shell.execute("echo gamma > /tmp/grep_b.txt") == 0
+            assert shell.execute("echo alpha >> /tmp/grep_b.txt") == 0
+
+            assert shell.execute("grep Alpha /tmp/grep_a.txt > /tmp/grep_plain.txt") == 0
+            assert fs.read_file("/tmp/grep_plain.txt") == b"Alpha\n"
+
+            assert shell.execute("grep -i alpha /tmp/grep_a.txt > /tmp/grep_i.txt") == 0
+            assert fs.read_file("/tmp/grep_i.txt") == b"Alpha\nALPHA\n"
+
+            assert shell.execute("grep -n alpha /tmp/grep_b.txt > /tmp/grep_n.txt") == 0
+            assert fs.read_file("/tmp/grep_n.txt") == b"2:alpha\n"
+
+            assert shell.execute("grep -v alpha /tmp/grep_b.txt > /tmp/grep_v.txt") == 0
+            assert fs.read_file("/tmp/grep_v.txt") == b"gamma\n"
+
+            assert shell.execute("grep -n alpha /tmp/grep_a.txt /tmp/grep_b.txt > /tmp/grep_multi.txt") == 0
+            multi = fs.read_file("/tmp/grep_multi.txt")
+            assert b"/tmp/grep_b.txt:2:alpha\n" in multi
+
+            assert shell.execute("grep -z alpha /tmp/grep_a.txt") == 1
+            assert shell.execute("grep alpha /tmp/does-not-exist") == 1
+            assert shell.execute("grep missing /tmp/grep_a.txt") == 1
+
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
