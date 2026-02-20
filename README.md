@@ -409,6 +409,40 @@ When a background job completes, you'll see:
 
 ## Future Enhancements
 
+## v1.8 Changelog
+
+### New Commands (13)
+| Command | Description |
+|---------|-------------|
+| `sed` | Stream editor — `s/pat/repl/flags`, `d` delete, `p` print, `y` transliterate, address ranges |
+| `awk` | Pattern scanning — field splitting, `BEGIN`/`END`, pattern matching, `print`/`printf` |
+| `tr` | Translate/delete characters, character ranges, squeeze repeats (`-s`) |
+| `xargs` | Build and execute commands from stdin, `-n` max-args batching |
+| `seq` | Print number sequences — `seq N`, `seq FIRST LAST`, `seq FIRST STEP LAST` |
+| `bc` | Arbitrary-precision calculator — stdin or inline expressions, math functions |
+| `expr` | Evaluate arithmetic, string length/index/substr, regex match |
+| `printf` | C-style formatted output with `%s`, `%d`, `%f` specifiers |
+| `cal` | Display a calendar — current month, specific month/year, full year (`-y`) |
+| `mktemp` | Create unique temp file or directory (`-d`) |
+| `readlink` | Print symlink target or canonical path (`-f`) |
+| `realpath` | Resolve and print absolute file path |
+| `fetch` | HTTP/HTTPS client using `urllib` — `-o outfile`, `-H headers`, `-X method` |
+| `watch` | Run a command repeatedly every N seconds (`-n`, `-c count`) |
+| `strings` | Extract printable strings from binary files |
+| `yes` | Repeatedly output a string |
+
+### Shell Engine Upgrades
+- **Arithmetic expansion** `$(( expr ))` — full arithmetic with `+`, `-`, `*`, `/`, `**`, `%`
+- **Command substitution** `$( cmd )` — capture command output into arguments
+- **Parameter expansion** — `${var:-default}`, `${var:=default}`, `${var:?error}`, `${var:+alt}`, `${#var}`
+- **Here-doc** `cmd <<EOF … EOF` — redirect multi-line inline text as stdin
+- **Quote-aware output redirect** — `>` and `>>` parsing no longer strips single-quoted awk/sed programs
+- **`#` not treated as comment** in command arguments (fixes `${#var}` and awk/sed programs)
+
+### Scripting Engine Upgrades
+- **`case..esac`** — fully implemented with multi-line block collection, `|` pattern alternation, `*` wildcard, fnmatch patterns
+- **Multi-line block collection** — `if`/`fi`, `while`/`done`, `for`/`done`, `case`/`esac` now correctly span multiple lines in scripts
+
 ### Completed Features ✓
 - [x] Persistent storage (JSON or pickle) ✓ **v1.1**
 - [x] Text editor (vim-like) ✓ **v1.1**
