@@ -250,7 +250,10 @@ class Shell:
         line = self._expand_environment_variables(line)
 
         try:
-            parts = shlex.split(line)
+            lex = shlex.shlex(line, posix=True)
+            lex.whitespace_split = True
+            lex.commenters = ''  # Don't treat # as comment (we handle it ourselves)
+            parts = list(lex)
         except ValueError:
             parts = line.split()
 
