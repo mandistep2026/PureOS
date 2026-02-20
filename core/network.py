@@ -5,6 +5,7 @@ Virtual network simulation with interfaces, sockets, and routing.
 
 import time
 import random
+import secrets
 import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
