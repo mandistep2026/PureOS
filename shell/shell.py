@@ -4529,5 +4529,217 @@ class PrintfCommand(ShellCommand):
         return 0
 
 
-class Seq Command(ShellCommand):
-    pass  # placeholder - removed syntax error below
+class SeqCommand(ShellCommand):
+    """Print a sequence of numbers."""
+
+    def __init__(self):
+        super().__init__("seq", "Print a sequence of numbers")
+
+    def execute(self, args: List[str], shell) -> int:
+        sep = '\n'
+        fmt = None
+        non_flag: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-s', '--separator') and i + 1 < len(args):
+                i += 1
+                sep = args[i].replace('\\n', '\n').replace('\\t', '\t')
+            elif args[i] in ('-f', '--format') and i + 1 < len(args):
+                i += 1
+                fmt = args[i]
+            elif args[i].startswith('-'):
+                pass
+            else:
+                non_flag.append(args[i])
+            i += 1
+
+        try:
+            if len(non_flag) == 1:
+                first, step, last = 1, 1, int(non_flag[0])
+            elif len(non_flag) == 2:
+                first, step, last = int(non_flag[0]), 1, int(non_flag[1])
+            elif len(non_flag) == 3:
+                first, step, last = int(non_flag[0]), int(non_flag[1]), int(non_flag[2])
+            else:
+                print("Usage: seq [FIRST [STEP]] LAST")
+                return 1
+        except ValueError:
+            print("seq: invalid argument")
+            return 1
+
+        nums = []
+        n = first
+        while (step > 0 and n <= last) or (step < 0 and n >= last):
+            if fmt:
+                try:
+                    nums.append(fmt % n)
+                except Exception:
+                    nums.append(str(n))
+            else:
+                nums.append(str(n))
+            n += step
+
+        print(sep.join(nums))
+        return 0
+
+
+class YesCommand(ShellCommand):
+    """Output a string repeatedly until killed."""
+
+    def __init__(self):
+        super().__init__("yes", "Output a string repeatedly until killed")
+
+    def execute(self, args: List[str], shell) -> int:
+        word = ' '.join(args) if args else 'y'
+        try:
+            # With a count limit to avoid infinite loops in tests
+            count = 0
+            while True:
+                print(word)
+                count += 1
+                if count >= 10000:  # safety limit
+                    break
+        except (KeyboardInterrupt, BrokenPipeError):
+            pass
+        return 0
+
+
+class StringsCommand(ShellCommand):
+    """Print printable strings from files."""
+
+    def __init__(self):
+        super().__init__("strings", "Print the sequences of printable characters in files")
+
+    def execute(self, args: List[str], shell) -> int:
+        min_len = 4
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-n', '--bytes') and i + 1 < len(args):
+                i += 1
+                try:
+                    min_len = int(args[i])
+                except ValueError:
+                    pass
+            elif not args[i].startswith('-'):
+                filenames.append(args[i])
+            i += 1
+
+        if not filenames:
+            print("Usage: strings [-n min] file [...]")
+            return 1
+
+        import re as _re
+        for fn in filenames:
+            data = shell.fs.read_file(fn)
+            if data is None:
+                print(f"strings: {fn}: No such file or directory", file=sys.stderr)
+                continue
+            text = data.decode('latin-1', errors='replace')
+            pattern = _re.compile(r'[ -~]{%d,}' % min_len)
+            for m in pattern.finditer(text):
+                print(m.group())
+        return 0
+
+
+class ExprCommand(ShellCommand):
+    """Evaluate expressions."""
+
+    def __init__(self):
+        super().__init__("expr", "Evaluate expressions")
+
+    def execute(self, args: List[str], shell) -> int:
+        import re as _re
+        if not args:
+            print("Usage: expr expression")
+            return 1
+
+        expr = ' '.join(args)
+
+        # Handle string operations
+        # expr string : regex  → match
+        m = _re.match(r'^(.+)\s+:\s+(.+)$', expr)
+        if m:
+            s = m.group(1).strip().strip("'\"")
+            pat = m.group(2).strip().strip("'\"")
+            match = _re.match(pat, s)
+            if match:
+                if match.groups():
+                    print(match.group(1))
+                    return 0
+                else:
+                    print(len(match.group(0)))
+                    return 0
+            else:
+                print(0)
+                return 1
+
+        # Arithmetic: expr num op num
+        m = _re.match(r'^(-?\d+)\s*([+\-\*/%])\s*(-?\d+)$', expr)
+        if m:
+            a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+            try:
+                if op == '+':   result = a + b
+                elif op == '-': result = a - b
+                elif op == '*': result = a * b
+                elif op == '/':
+                    if b == 0:
+                        print("expr: division by zero", file=sys.stderr)
+                        return 2
+                    result = a // b
+                elif op == '%':
+                    if b == 0:
+                        print("expr: division by zero", file=sys.stderr)
+                        return 2
+                    result = a % b
+                else:
+                    result = 0
+                print(result)
+                return 0 if result != 0 else 1
+            except Exception as e:
+                print(f"expr: {e}", file=sys.stderr)
+                return 2
+
+        # Comparison: num cmp num
+        m = _re.match(r'^(-?\d+)\s*(<=|>=|!=|=|<|>)\s*(-?\d+)$', expr)
+        if m:
+            a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
+            ops = {'=': lambda x,y: x==y, '!=': lambda x,y: x!=y,
+                   '<': lambda x,y: x<y,  '>': lambda x,y: x>y,
+                   '<=': lambda x,y: x<=y,'>=': lambda x,y: x>=y}
+            result = 1 if ops.get(op, lambda x,y: False)(a, b) else 0
+            print(result)
+            return 0 if result else 1
+
+        # length string
+        m = _re.match(r'^length\s+"?([^"]*)"?$', expr)
+        if m:
+            print(len(m.group(1)))
+            return 0
+
+        # substr string pos len
+        m = _re.match(r'^substr\s+"?([^"]*)"?\s+(\d+)\s+(\d+)$', expr)
+        if m:
+            s, pos, length = m.group(1), int(m.group(2)), int(m.group(3))
+            print(s[pos-1:pos-1+length])
+            return 0
+
+        # index string chars
+        m = _re.match(r'^index\s+"?([^"]*)"?\s+"?([^"]*)"?$', expr)
+        if m:
+            s, chars = m.group(1), m.group(2)
+            for i, ch in enumerate(s, 1):
+                if ch in chars:
+                    print(i)
+                    return 0
+            print(0)
+            return 1
+
+        # Fallback: try safe eval
+        try:
+            result = eval(expr, {"__builtins__": {}}, {})
+            print(result)
+            return 0 if result else 1
+        except Exception:
+            print(f"expr: syntax error")
+            return 2
