@@ -1577,18 +1577,39 @@ class ChmodCommand(ShellCommand):
             print("Usage: chmod <permissions> <file> [file ...]")
             return 1
 
-        permissions = self._parse_permissions(args[0])
+        import re as _re
+        mode_arg = args[0]
         paths = args[1:]
 
+        permissions = self._parse_permissions(mode_arg)
+
         if permissions is None:
-            print(f"chmod: invalid mode: '{args[0]}'")
+            print(f"chmod: invalid mode: '{mode_arg}'")
             print("Use symbolic mode (rwxr-xr-x) or octal mode (755)")
             return 1
 
+        # Detect symbolic mode (contains +/-/=) vs absolute 9-char or octal result
+        is_symbolic = bool(_re.match(r'^([ugoa]*)([+\-=])([rwx]+)$', mode_arg))
+
         for path in paths:
-            if not shell.fs.chmod(path, permissions):
-                print(f"chmod: cannot access '{path}': No such file or directory")
-                return 1
+            if is_symbolic:
+                # Get current permissions to apply delta
+                inode = shell.fs.get_inode(path)
+                if inode is None:
+                    print(f"chmod: cannot access '{path}': No such file or directory")
+                    return 1
+                current = inode.permissions if len(inode.permissions) == 9 else "rw-rw-r--"
+                new_perms = self._apply_symbolic_mode(current, mode_arg)
+                if new_perms is None:
+                    print(f"chmod: invalid mode: '{mode_arg}'")
+                    return 1
+                if not shell.fs.chmod(path, new_perms):
+                    print(f"chmod: cannot access '{path}': No such file or directory")
+                    return 1
+            else:
+                if not shell.fs.chmod(path, permissions):
+                    print(f"chmod: cannot access '{path}': No such file or directory")
+                    return 1
 
         return 0
 
