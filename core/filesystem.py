@@ -245,6 +245,8 @@ class FileSystem:
         )
         
         self.inodes[path] = inode
+        self.total_writes += 1
+        self.written_bytes_total += len(content)
         return self._add_to_parent(path, name)
     
     def write_file(self, path: str, content: bytes) -> bool:
