@@ -11,7 +11,7 @@ tools:
 - find_and_replace_code
 - grep
 - expand_folder
-model: claude-sonnet-4-6
+model: openai-responses-api:gpt-5.2-codex
 load_memory: false
 additional_memory_file: ''
 ---

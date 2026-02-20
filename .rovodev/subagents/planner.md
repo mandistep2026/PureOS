@@ -7,7 +7,7 @@ tools:
 - expand_code_chunks
 - grep
 - expand_folder
-model: claude-sonnet-4-6
+model: openai-responses-api:gpt-5.2-codex
 load_memory: true
 additional_memory_file: ''
 ---

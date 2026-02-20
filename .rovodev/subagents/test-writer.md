@@ -12,7 +12,7 @@ tools:
 - grep
 - expand_folder
 - bash
-model: claude-sonnet-4-6
+model: openai-responses-api:gpt-5.2-codex
 load_memory: true
 additional_memory_file: ''
 ---
