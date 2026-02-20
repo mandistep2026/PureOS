@@ -81,7 +81,7 @@ class Socket:
         self.local_addr: Optional[Tuple[str, int]] = None
         self.remote_addr: Optional[Tuple[str, int]] = None
         self.state = "CLOSED"
-        self.fd: int = random.randint(1000, 9999)
+        self.fd: int = secrets.randbelow(9000) + 1000
 
     def bind(self, address: Tuple[str, int]) -> None:
         self.local_addr = address

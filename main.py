@@ -164,7 +164,6 @@ class PureOS:
                 if success:
                     print(f"\nWelcome, {username}!")
                     if username == "alice":
-                        print("Default password is: password123")
                         print("Change it with: passwd")
                     print()
                     

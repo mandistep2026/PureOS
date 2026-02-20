@@ -216,6 +216,9 @@ class Kernel:
                       *args, **kwargs) -> int:
         """Create a new process."""
         with self.process_table_lock:
+            # Check process limit
+            if len(self.processes) >= MAX_PROCESSES:
+                raise RuntimeError(f"Process limit reached (max: {MAX_PROCESSES})")
             pid = self.next_pid
             self.next_pid += 1
         

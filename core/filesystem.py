@@ -100,6 +100,10 @@ class FileSystem:
     
     def _normalize_path(self, path: str) -> str:
         """Normalize a path to absolute form."""
+        if '\x00' in path:
+            raise ValueError("Path contains null byte")
+        if len(path) > 4096:
+            raise ValueError("Path too long")
         if not path.startswith("/"):
             path = os.path.join(self.current_directory, path)
         
