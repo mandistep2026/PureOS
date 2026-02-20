@@ -210,6 +210,23 @@ class Shell:
         self.register_command(TarCommand())
         self.register_command(CronCommand())
         self.register_command(TopCommand())
+        # v1.8 commands
+        self.register_command(SedCommand())
+        self.register_command(AwkCommand())
+        self.register_command(TrCommand())
+        self.register_command(XargsCommand())
+        self.register_command(MktempCommand())
+        self.register_command(ReadlinkCommand())
+        self.register_command(RealpathCommand())
+        self.register_command(WatchCommand())
+        self.register_command(FetchCommand())
+        self.register_command(CalCommand())
+        self.register_command(BcCommand())
+        self.register_command(PrintfCommand())
+        self.register_command(SeqCommand())
+        self.register_command(YesCommand())
+        self.register_command(StringsCommand())
+        self.register_command(ExprCommand())
     
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
