@@ -825,10 +825,18 @@ class Shell:
         """Execute a single (non-pipeline) command with full redirection support."""
         # Parse stdin redirection first
         line_no_stdin, input_file = self._parse_input_redirection(line)
+        # Parse combined redirection (&> or &>>)
+        line_cmd, both_file, both_append = self._parse_both_redirection(line_no_stdin)
         # Parse output redirection
-        line_cmd, output_file, append_mode = self._parse_output_redirection(line_no_stdin)
+        line_cmd, output_file, append_mode = self._parse_output_redirection(line_cmd)
         # Parse stderr redirection
         line_cmd, err_file, err_append = self._parse_error_redirection(line_cmd)
+
+        if both_file:
+            output_file = both_file
+            append_mode = both_append
+            err_file = both_file
+            err_append = both_append
 
         command_name, args = self.parse_input(line_cmd)
         if not command_name:
