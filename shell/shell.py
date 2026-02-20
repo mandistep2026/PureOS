@@ -202,6 +202,14 @@ class Shell:
             self.register_command(ArpCommand())
         except:
             pass
+
+        # v1.7 new commands
+        self.register_command(LnCommand())
+        self.register_command(DiffCommand())
+        self.register_command(TeeCommand())
+        self.register_command(TarCommand())
+        self.register_command(CronCommand())
+        self.register_command(TopCommand())
     
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
@@ -390,7 +398,6 @@ class Shell:
 
         # Handle history commands
         if stripped == "!!":
-            # Repeat last command
             if not self.history:
                 print("!!: event not found")
                 return 1
@@ -399,7 +406,6 @@ class Shell:
             return self.execute(line, save_to_history=False)
 
         if stripped.startswith("!") and stripped[1:].isdigit():
-            # Execute command by history number
             n = int(stripped[1:])
             if n < 1 or n > len(self.history):
                 print(f"{stripped}: event not found")
@@ -408,26 +414,172 @@ class Shell:
             print(f"{line}")
             return self.execute(line, save_to_history=False)
 
-        # Save to history (except for history commands themselves)
+        # Save to history
         if save_to_history and stripped and not stripped.startswith("!"):
             self.history.append(stripped)
             self.history_position = len(self.history)
 
+        # Handle pipe chains: split on unquoted '|'
+        pipe_segments = self._split_pipes(stripped)
+        if len(pipe_segments) > 1:
+            return self._execute_pipeline(pipe_segments, background)
+
+        # Single command — parse redirections then execute
+        return self._execute_single(line, background)
+
+    def _split_pipes(self, line: str) -> List[str]:
+        """Split a command line on unquoted pipe characters."""
+        segments: List[str] = []
+        current: List[str] = []
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == '\\' and i + 1 < len(line) and not in_single:
+                current.append(ch)
+                current.append(line[i + 1])
+                i += 2
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            if ch == '|' and not in_single and not in_double:
+                segments.append(''.join(current).strip())
+                current = []
+                i += 1
+                continue
+            current.append(ch)
+            i += 1
+        segments.append(''.join(current).strip())
+        return segments
+
+    def _execute_pipeline(self, segments: List[str], background: bool = False) -> int:
+        """Execute a pipeline of commands, connecting stdout → stdin."""
+        pipeline_input: Optional[str] = None
+        last_exit = 0
+
+        for idx, segment in enumerate(segments):
+            segment = segment.strip()
+            if not segment:
+                continue
+
+            # Parse redirections for this segment
+            seg_cmd, output_file, append_mode = self._parse_output_redirection(segment)
+            input_file = None
+            seg_cmd, input_file = self._parse_input_redirection(seg_cmd)
+
+            command_name, args = self.parse_input(seg_cmd)
+            if not command_name:
+                continue
+
+            # Build stdin
+            old_stdin = sys.stdin
+            if input_file is not None:
+                content = self.fs.read_file(input_file)
+                if content is None:
+                    print(f"bash: {input_file}: No such file or directory")
+                    return 1
+                sys.stdin = StringIO(content.decode('utf-8', errors='replace'))
+            elif pipeline_input is not None:
+                sys.stdin = StringIO(pipeline_input)
+
+            # Capture stdout (always for intermediate, or when redirecting final)
+            is_last = (idx == len(segments) - 1)
+            old_stdout = sys.stdout
+            capture_output = (not is_last) or (output_file is not None)
+            out_buf = StringIO() if capture_output else None
+            if out_buf:
+                sys.stdout = out_buf
+
+            try:
+                if command_name in self.commands:
+                    try:
+                        last_exit = self.commands[command_name].execute(args, self)
+                    except Exception as e:
+                        sys.stdout = old_stdout
+                        sys.stdin = old_stdin
+                        print(f"Error: {e}")
+                        last_exit = 1
+                else:
+                    sys.stdout = old_stdout
+                    sys.stdin = old_stdin
+                    print(f"{command_name}: command not found")
+                    last_exit = 127
+            finally:
+                sys.stdout = old_stdout
+                sys.stdin = old_stdin
+
+            # Handle output
+            if out_buf:
+                captured = out_buf.getvalue()
+                out_buf.close()
+
+                if output_file is not None:
+                    existing = b""
+                    if append_mode and self.fs.exists(output_file):
+                        ex = self.fs.read_file(output_file)
+                        if ex:
+                            existing = ex
+                    self.fs.write_file(output_file, existing + captured.encode('utf-8'))
+                    pipeline_input = None
+                else:
+                    pipeline_input = captured
+            else:
+                pipeline_input = None
+
+        self.last_exit_code = last_exit
+        return last_exit
+
+    def _parse_input_redirection(self, line: str) -> Tuple[str, Optional[str]]:
+        """Parse stdin redirection (< file) from a command line.
+        Returns (cleaned_line, input_file_or_None).
+        """
+        try:
+            lexer = shlex.shlex(line, posix=True, punctuation_chars='<')
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            return line, None
+
+        for i, token in enumerate(tokens):
+            if token == '<':
+                if i + 1 < len(tokens):
+                    input_file = tokens[i + 1]
+                    command = ' '.join(tokens[:i]).strip()
+                    return command, input_file
+            elif token.startswith('<') and len(token) > 1:
+                input_file = token[1:]
+                command = ' '.join(tokens[:i]).strip()
+                return command, input_file
+        return line, None
+
+    def _execute_single(self, line: str, background: bool = False) -> int:
+        """Execute a single (non-pipeline) command with full redirection support."""
+        # Parse stdin redirection first
+        line_no_stdin, input_file = self._parse_input_redirection(line)
         # Parse output redirection
-        line, output_file, append_mode = self._parse_output_redirection(line)
+        line_cmd, output_file, append_mode = self._parse_output_redirection(line_no_stdin)
 
-        command_name, args = self.parse_input(line)
-
+        command_name, args = self.parse_input(line_cmd)
         if not command_name:
             return 0
 
-        # Handle background execution
         if background and self.job_manager:
-            return self._execute_background(command_name, args, stripped)
+            return self._execute_background(command_name, args, line.strip())
 
-        # Capture output if redirecting
+        old_stdin = sys.stdin
         old_stdout = sys.stdout
         output_buffer = None
+
+        # Set up stdin redirection
+        if input_file is not None:
+            content = self.fs.read_file(input_file)
+            if content is None:
+                print(f"bash: {input_file}: No such file or directory")
+                return 1
+            sys.stdin = StringIO(content.decode('utf-8', errors='replace'))
 
         if output_file and command_name in self.commands:
             output_buffer = StringIO()
@@ -438,37 +590,31 @@ class Shell:
                 try:
                     self.last_exit_code = self.commands[command_name].execute(args, self)
                 except Exception as e:
-                    if output_buffer:
-                        sys.stdout = old_stdout
+                    sys.stdout = old_stdout
+                    sys.stdin = old_stdin
                     print(f"Error: {e}")
                     self.last_exit_code = 1
             else:
-                if output_buffer:
-                    sys.stdout = old_stdout
+                sys.stdout = old_stdout
+                sys.stdin = old_stdin
                 print(f"{command_name}: command not found")
                 self.last_exit_code = 127
 
-            # Handle output redirection
             if output_file and output_buffer:
                 sys.stdout = old_stdout
                 output_content = output_buffer.getvalue()
-
-                # Get existing content if appending
                 existing_content = b""
                 if append_mode and self.fs.exists(output_file):
                     existing = self.fs.read_file(output_file)
                     if existing:
                         existing_content = existing
-
-                # Write to file
                 new_content = existing_content + output_content.encode('utf-8')
                 if not self.fs.write_file(output_file, new_content):
                     print(f"Cannot write to '{output_file}'")
                     self.last_exit_code = 1
-
         finally:
-            # Always restore stdout
             sys.stdout = old_stdout
+            sys.stdin = old_stdin
             if output_buffer:
                 output_buffer.close()
 
