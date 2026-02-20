@@ -108,6 +108,7 @@ class Shell:
         self.register_command(MvCommand())
         self.register_command(ChmodCommand())
         self.register_command(ChownCommand())
+        self.register_command(StatCommand())
         self.register_command(NanoCommand())
         self.register_command(GrepCommand())
         self.register_command(HeadCommand())
@@ -999,6 +1000,37 @@ class ChownCommand(ShellCommand):
                 return 1
 
         return 0
+
+
+class StatCommand(ShellCommand):
+    """Display file or directory status."""
+
+    def __init__(self):
+        super().__init__("stat", "Display file or directory status")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("stat: missing operand")
+            return 1
+
+        exit_code = 0
+        for path in args:
+            info = shell.fs.stat(path)
+            if info is None:
+                print(f"stat: cannot stat '{path}': No such file or directory")
+                exit_code = 1
+                continue
+
+            normalized_path = shell.fs._normalize_path(path)
+            print(f"  File: {normalized_path}")
+            print(f"  Type: {info['type']}")
+            print(f"  Size: {info['size']} bytes")
+            print(f"Access: ({info['permissions']})")
+            print(f"Owner: {info['owner']}:{info['group']}")
+            print(f"Modify: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(info['modified']))}")
+            print(f"Create: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(info['created']))}")
+
+        return exit_code
 
 
 class PsCommand(ShellCommand):
