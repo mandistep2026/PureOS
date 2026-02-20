@@ -706,9 +706,16 @@ class Shell:
                 continue
 
             # Parse redirections for this segment
-            seg_cmd, output_file, append_mode = self._parse_output_redirection(segment)
+            seg_cmd, both_file, both_append = self._parse_both_redirection(segment)
+            seg_cmd, output_file, append_mode = self._parse_output_redirection(seg_cmd)
             seg_cmd, err_file, err_append = self._parse_error_redirection(seg_cmd)
             seg_cmd, input_file = self._parse_input_redirection(seg_cmd)
+
+            if both_file:
+                output_file = both_file
+                append_mode = both_append
+                err_file = both_file
+                err_append = both_append
 
             command_name, args = self.parse_input(seg_cmd)
             if not command_name:
