@@ -5230,9 +5230,12 @@ class NlCommand(ShellCommand):
             n = start
             for line in lines:
                 stripped = line.rstrip('\n')
-                if body_numbering == 'a' or (body_numbering != 'n' and stripped):
+                # Default body_numbering='t': number non-empty lines only
+                if body_numbering == 'a' or (body_numbering == 't' and stripped) or (body_numbering not in ('a', 't', 'n') and stripped):
                     print(f"{n:>6}\t{stripped}")
                     n += increment
+                elif body_numbering == 'n':
+                    print(f"      \t{stripped}")
                 else:
                     print(f"      \t{stripped}")
 
