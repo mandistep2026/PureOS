@@ -275,6 +275,58 @@ class Kernel:
             return 0.0
         return max(0.0, time.time() - self._boot_time)
     
+    def send_signal(self, pid: int, signal: "Signal") -> bool:
+        """Send a signal to a process.
+
+        SIGKILL and SIGTERM terminate the process immediately.
+        SIGSTOP suspends it; SIGCONT resumes it.
+        All other signals are queued as pending.
+        """
+        with self.process_table_lock:
+            if pid not in self.processes:
+                return False
+            process = self.processes[pid]
+
+            if signal in (Signal.SIGKILL, Signal.SIGTERM):
+                process.state = ProcessState.TERMINATED
+                self.memory_manager.free(pid)
+            elif signal == Signal.SIGSTOP or signal == Signal.SIGTSTP:
+                if process.state in (ProcessState.RUNNING, ProcessState.READY):
+                    process.state = ProcessState.STOPPED
+            elif signal == Signal.SIGCONT:
+                if process.state == ProcessState.STOPPED:
+                    process.state = ProcessState.READY
+                    self.scheduler.add_process(process)
+            else:
+                # Queue signal; custom handler can be checked later
+                handler = process.signal_handlers.get(signal.value)
+                if handler is not None:
+                    try:
+                        handler(signal.value)
+                    except Exception:
+                        pass
+                else:
+                    process.pending_signals.append(signal.value)
+            return True
+
+    def register_signal_handler(self, pid: int, signal: "Signal",
+                                handler: Optional[Callable]) -> bool:
+        """Register a custom signal handler for a process."""
+        with self.process_table_lock:
+            if pid not in self.processes:
+                return False
+            self.processes[pid].signal_handlers[signal.value] = handler
+            return True
+
+    def get_pending_signals(self, pid: int) -> List[int]:
+        """Return and clear the list of pending signals for a process."""
+        with self.process_table_lock:
+            if pid not in self.processes:
+                return []
+            signals = list(self.processes[pid].pending_signals)
+            self.processes[pid].pending_signals.clear()
+            return signals
+
     def get_system_info(self) -> Dict[str, Any]:
         """Get system information."""
         return {
