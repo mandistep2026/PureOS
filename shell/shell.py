@@ -12,6 +12,7 @@ import posixpath
 from io import StringIO
 from typing import List, Dict, Callable, Optional, Tuple, Any
 from pathlib import Path
+from core.filesystem import FileType
 
 
 class ShellCommand:
@@ -128,6 +129,7 @@ class Shell:
         self.register_command(UnameCommand())
         self.register_command(FreeCommand())
         self.register_command(DfCommand())
+        self.register_command(DuCommand())
         
         # User management
         self.register_command(UseraddCommand())
@@ -1730,6 +1732,91 @@ class DfCommand(ShellCommand):
         return 0
 
 
+class DuCommand(ShellCommand):
+    """Estimate file space usage."""
+
+    def __init__(self):
+        super().__init__("du", "Estimate file space usage")
+
+    def execute(self, args: List[str], shell) -> int:
+        summarize = "-s" in args
+        human_readable = "-h" in args
+        paths = [arg for arg in args if not arg.startswith('-')]
+
+        if not paths:
+            paths = [shell.fs.get_current_directory()]
+
+        def format_size(size: int) -> str:
+            if not human_readable:
+                return str(size)
+
+            value = float(size)
+            for unit in ['B', 'K', 'M', 'G', 'T']:
+                if value < 1024 or unit == 'T':
+                    return f"{value:.1f}{unit}" if unit != 'B' else f"{int(value)}B"
+                value /= 1024
+            return f"{value:.1f}T"
+
+        def path_size(path: str) -> int:
+            inode = shell.fs.get_inode(path)
+            if not inode:
+                return -1
+
+            # include inode metadata overhead consistently with df/get_size
+            total = 256
+            if inode.type == FileType.REGULAR:
+                return total + inode.size
+
+            if inode.type == FileType.SYMLINK:
+                target_len = len(inode.target.encode('utf-8')) if inode.target else 0
+                return total + target_len
+
+            if inode.type == FileType.DIRECTORY and isinstance(inode.content, dict):
+                for child_path in inode.content.values():
+                    child_total = path_size(child_path)
+                    if child_total >= 0:
+                        total += child_total
+            return total
+
+        exit_code = 0
+        for raw_path in paths:
+            try:
+                norm_path = shell.fs._normalize_path(raw_path)
+            except ValueError as e:
+                print(f"du: {raw_path}: {e}")
+                exit_code = 1
+                continue
+
+            if not shell.fs.exists(norm_path):
+                print(f"du: cannot access '{raw_path}': No such file or directory")
+                exit_code = 1
+                continue
+
+            if summarize:
+                total = path_size(norm_path)
+                print(f"{format_size(max(total, 0))}	{raw_path}")
+                continue
+
+            inode = shell.fs.get_inode(norm_path)
+            if inode is None:
+                print(f"du: cannot access '{raw_path}': No such file or directory")
+                exit_code = 1
+                continue
+
+            if inode.type == FileType.DIRECTORY and isinstance(inode.content, dict):
+                child_paths = sorted(inode.content.values())
+                for child_path in child_paths:
+                    total = path_size(child_path)
+                    name = child_path.rsplit('/', 1)[-1]
+                    display_path = f"{raw_path.rstrip('/')}/{name}" if raw_path != '/' else f"/{name}"
+                    print(f"{format_size(max(total, 0))}	{display_path}")
+
+            total = path_size(norm_path)
+            print(f"{format_size(max(total, 0))}	{raw_path}")
+
+        return exit_code
+
+
 class EchoCommand(ShellCommand):
     """Display a line of text."""
     
@@ -1768,7 +1855,7 @@ class HelpCommand(ShellCommand):
             
             categories = {
                 "File Operations": ["ls", "cd", "pwd", "cat", "mkdir", "rmdir", "rm", "touch", "cp", "mv", "find"],
-                "System Info": ["ps", "kill", "uname", "free", "df", "uptime"],
+                "System Info": ["ps", "kill", "uname", "free", "df", "du", "uptime"],
                 "Utilities": ["echo", "help", "clear", "date", "whoami", "env", "export", "history", "which", "type"],
                 "System": ["reboot", "shutdown", "exit"],
             }
