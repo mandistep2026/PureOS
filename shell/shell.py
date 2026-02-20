@@ -4933,3 +4933,137 @@ class ExprCommand(ShellCommand):
         except Exception:
             print(f"expr: syntax error")
             return 2
+
+
+# ── v1.9 New Commands ─────────────────────────────────────────────────────────
+
+class GroupsCommand(ShellCommand):
+    """Show group memberships for a user."""
+
+    def __init__(self):
+        super().__init__("groups", "Print group memberships for a user")
+
+    def execute(self, args: List[str], shell) -> int:
+        username = args[0] if args else shell.environment.get("USER", "root")
+        if shell.um:
+            grps = shell.um.get_user_groups(username)
+            if not grps:
+                print(f"groups: {username}: unknown user")
+                return 1
+            print(' '.join(grps))
+        else:
+            print(username)
+        return 0
+
+
+class PstreeCommand(ShellCommand):
+    """Display process tree."""
+
+    def __init__(self):
+        super().__init__("pstree", "Display a tree of processes")
+
+    def execute(self, args: List[str], shell) -> int:
+        show_pids = '-p' in args
+        processes = shell.kernel.list_processes()
+        # Build parent->children map
+        children: Dict[Optional[int], List] = {}
+        for p in processes:
+            parent = p.parent_pid
+            children.setdefault(parent, []).append(p)
+
+        def _print_tree(pid_or_none, prefix="", is_last=True):
+            kids = children.get(pid_or_none, [])
+            for i, proc in enumerate(kids):
+                last = (i == len(kids) - 1)
+                connector = "└── " if last else "├── "
+                label = proc.name
+                if show_pids:
+                    label = f"{proc.name}({proc.pid})"
+                print(f"{prefix}{connector}{label}")
+                extension = "    " if last else "│   "
+                _print_tree(proc.pid, prefix + extension, last)
+
+        # Print init/root processes (no parent or parent not in process list)
+        pids_in_table = {p.pid for p in processes}
+        roots = [p for p in processes
+                 if p.parent_pid is None or p.parent_pid not in pids_in_table]
+        if not roots:
+            roots = processes
+
+        for proc in roots:
+            label = proc.name
+            if show_pids:
+                label = f"{proc.name}({proc.pid})"
+            print(label)
+            _print_tree(proc.pid)
+        return 0
+
+
+class VmstatCommand(ShellCommand):
+    """Report virtual memory statistics."""
+
+    def __init__(self):
+        super().__init__("vmstat", "Report virtual memory statistics")
+
+    def execute(self, args: List[str], shell) -> int:
+        info = shell.kernel.get_system_info()
+        total  = info["total_memory"]
+        used   = info["used_memory"]
+        free   = info["free_memory"]
+        procs  = info["process_count"]
+        run    = info["running_processes"]
+        # Convert to KB
+        total_kb = total // 1024
+        used_kb  = used  // 1024
+        free_kb  = free  // 1024
+        print("procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----")
+        print(" r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st")
+        print(f" {run}  0      0 {free_kb:6d}      0      0    0    0     0     0    0    0  0  0 100  0  0")
+        print()
+        print(f"Total memory : {total_kb:>10} KB")
+        print(f"Used memory  : {used_kb:>10} KB")
+        print(f"Free memory  : {free_kb:>10} KB")
+        print(f"Processes    : {procs:>10}")
+        return 0
+
+
+class LsofCommand(ShellCommand):
+    """List open files (virtual - shows filesystem inodes)."""
+
+    def __init__(self):
+        super().__init__("lsof", "List open files")
+
+    def execute(self, args: List[str], shell) -> int:
+        user_filter = None
+        i = 0
+        while i < len(args):
+            if args[i] == '-u' and i + 1 < len(args):
+                i += 1
+                user_filter = args[i]
+            i += 1
+
+        print(f"{'COMMAND':<12} {'PID':>6}  {'USER':<10} {'TYPE':<8} {'NAME'}")
+        print("-" * 60)
+        processes = shell.kernel.list_processes()
+        current_user = shell.environment.get("USER", "root")
+        shown = 0
+        for proc in processes:
+            owner = current_user
+            if user_filter and owner != user_filter:
+                continue
+            # Show the process's notional open files
+            print(f"{'shell':<12} {proc.pid:>6}  {owner:<10} {'REG':<8} /dev/pts/0")
+            shown += 1
+
+        # Also show virtual fs files as open by shell
+        for path, inode in list(shell.fs.inodes.items())[:20]:
+            from core.filesystem import FileType
+            if inode.type == FileType.REGULAR:
+                owner = inode.owner
+                if user_filter and owner != user_filter:
+                    continue
+                print(f"{'pureos':<12} {'1':>6}  {owner:<10} {'REG':<8} {path}")
+                shown += 1
+        if shown == 0:
+            print("(no open files found)")
+        return 0
