@@ -680,6 +680,39 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+
+        # Test 21: Uniq command
+        print("Test 21: Uniq command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo apple > /tmp/uniq.txt") == 0
+            assert shell.execute("echo apple >> /tmp/uniq.txt") == 0
+            assert shell.execute("echo banana >> /tmp/uniq.txt") == 0
+            assert shell.execute("echo banana >> /tmp/uniq.txt") == 0
+            assert shell.execute("echo carrot >> /tmp/uniq.txt") == 0
+
+            assert shell.execute("uniq /tmp/uniq.txt > /tmp/uniq_out.txt") == 0
+            assert fs.read_file("/tmp/uniq_out.txt") == b"apple\nbanana\ncarrot\n"
+
+            assert shell.execute("uniq -c /tmp/uniq.txt > /tmp/uniq_count.txt") == 0
+            assert fs.read_file("/tmp/uniq_count.txt") == b"2 apple\n2 banana\n1 carrot\n"
+
+            assert shell.execute("uniq -d /tmp/uniq.txt > /tmp/uniq_dup.txt") == 0
+            assert fs.read_file("/tmp/uniq_dup.txt") == b"apple\nbanana\n"
+
+            assert shell.execute("uniq -u /tmp/uniq.txt > /tmp/uniq_unique.txt") == 0
+            assert fs.read_file("/tmp/uniq_unique.txt") == b"carrot\n"
+
+            assert shell.execute("uniq -x /tmp/uniq.txt") == 1
+            assert shell.execute("uniq -d -u /tmp/uniq.txt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -720,6 +753,7 @@ def show_help():
     print("  which     Locate a command")
     print("  type      Describe command type")
     print("  sort      Sort lines in text files")
+    print("  uniq      Filter adjacent duplicate lines")
     print("  reboot    Reboot system")
     print("  shutdown  Power off")
     print("  exit      Exit shell")
