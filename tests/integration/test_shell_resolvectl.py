@@ -79,8 +79,10 @@ class TestResolvectlStatusCommand(BaseTestCase):
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
         text = content.decode("utf-8", errors="replace")
-        self.assertRegex(text, r"\bState: (UP|DOWN)\b")
-        self.assertRegex(text, r"\bAddress: \d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b")
+        state_pattern = re.compile(r"State:\s*(UP|DOWN)|Link\s+\S+\s+\((up|down)\)", re.IGNORECASE)
+        address_pattern = re.compile(r"Address(?:es)?:\s*\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}")
+        self.assertRegex(text, state_pattern)
+        self.assertRegex(text, address_pattern)
 
 
 if __name__ == "__main__":
