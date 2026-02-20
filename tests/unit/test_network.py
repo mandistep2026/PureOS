@@ -536,5 +536,299 @@ class TestPingCommand(BaseTestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# NetworkManager — ping result structure detail
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerPingResultDetail(BaseTestCase):
+    """Tests for per-packet result entry content and types."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def _ping(self, target, count=1, timeout=9999):
+        with patch("core.network.time.sleep"):
+            return self.nm.ping(target, count=count, timeout=timeout)
+
+    def test_result_entry_ttl_is_64(self):
+        """Every ping result entry must have ttl=64."""
+        _, results, _ = self._ping("8.8.8.8", count=3)
+        for r in results:
+            self.assertEqual(r["ttl"], 64, "Result entry ttl should always be 64.")
+
+    def test_result_entry_time_is_float(self):
+        """The 'time' field in each result entry should be a float."""
+        _, results, _ = self._ping("8.8.8.8", count=2)
+        for r in results:
+            self.assertIsInstance(
+                r["time"], float,
+                "Result entry 'time' should be a float (RTT in ms).",
+            )
+
+    def test_result_entry_time_is_positive(self):
+        """RTT must be strictly positive (implementation clamps to >= 0.1 ms)."""
+        _, results, _ = self._ping("8.8.8.8", count=2)
+        for r in results:
+            self.assertGreater(r["time"], 0, "RTT must be positive.")
+
+    def test_result_entry_success_is_bool(self):
+        """The 'success' field in each result entry should be a bool."""
+        _, results, _ = self._ping("8.8.8.8", count=2)
+        for r in results:
+            self.assertIsInstance(
+                r["success"], bool,
+                "Result entry 'success' should be a bool.",
+            )
+
+    def test_result_seq_is_sequential(self):
+        """seq values must be sequential starting at 1."""
+        _, results, _ = self._ping("8.8.8.8", count=5)
+        seqs = [r["seq"] for r in results]
+        self.assertEqual(seqs, list(range(1, 6)), "seq values should be 1..count.")
+
+    def test_ping_returns_three_tuple(self):
+        """ping should return exactly a 3-tuple (success, results, hostname)."""
+        result = self._ping("8.8.8.8")
+        self.assertIsInstance(result, tuple, "ping should return a tuple.")
+        self.assertEqual(len(result), 3, "ping tuple should have 3 elements.")
+
+    def test_ping_results_is_a_list(self):
+        """The second element of the ping return value should be a list."""
+        _, results, _ = self._ping("8.8.8.8", count=2)
+        self.assertIsInstance(results, list, "ping results should be a list.")
+
+    def test_ping_success_is_bool(self):
+        """The overall success flag should be a bool."""
+        success, _, _ = self._ping("8.8.8.8")
+        self.assertIsInstance(success, bool, "Overall ping success should be a bool.")
+
+
+# ---------------------------------------------------------------------------
+# NetworkManager — ping timeout threshold boundary
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerPingTimeoutBoundary(BaseTestCase):
+    """Fine-grained boundary tests for the timeout comparison in ping.
+
+    The implementation compares:  rtt < timeout * 1000
+    where rtt is in milliseconds and timeout is in seconds.
+
+    Known RTTs (from SIMULATED_HOSTS / SIMULATED_LOCAL):
+      8.8.8.8  -> rtt_base=25 ms  (varies ±10 %)
+      127.0.0.1 -> rtt=0.1 ms (constant, clamped from 0.05)
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def _ping(self, target, count=1, timeout=2.0):
+        with patch("core.network.time.sleep"):
+            return self.nm.ping(target, count=count, timeout=timeout)
+
+    def test_threshold_zero_ms_always_fails(self):
+        """timeout=0 means threshold=0 ms; all packets (rtt>=0.1) must fail."""
+        success, results, _ = self._ping("8.8.8.8", count=4, timeout=0)
+        self.assertFalse(success, "Overall success must be False when timeout=0.")
+        self.assertTrue(
+            all(not r["success"] for r in results),
+            "Every packet must fail when timeout=0.",
+        )
+
+    def test_threshold_generous_always_passes(self):
+        """timeout=9999 s → threshold=9_999_000 ms; all packets must succeed."""
+        success, results, _ = self._ping("8.8.8.8", count=4, timeout=9999)
+        self.assertTrue(success, "Overall success must be True when timeout=9999.")
+        self.assertTrue(
+            all(r["success"] for r in results),
+            "Every packet must succeed when timeout=9999.",
+        )
+
+    def test_localhost_rtt_is_below_1ms_threshold(self):
+        """127.0.0.1 rtt is 0.1 ms; timeout=0.001 s gives threshold=1 ms — passes."""
+        success, results, _ = self._ping("127.0.0.1", count=1, timeout=0.001)
+        self.assertTrue(
+            results[0]["success"],
+            "localhost packet (rtt=0.1 ms) should succeed with timeout=0.001 s (1 ms threshold).",
+        )
+
+    def test_count_zero_returns_empty_results(self):
+        """count=0 should return an empty result list."""
+        _, results, _ = self._ping("8.8.8.8", count=0)
+        self.assertEqual(results, [], "count=0 should produce an empty results list.")
+
+    def test_count_zero_success_is_true(self):
+        """count=0: no packets fail, so the overall success flag should be True."""
+        success, _, _ = self._ping("8.8.8.8", count=0)
+        self.assertTrue(
+            success,
+            "Overall success should be True when no packets were sent (count=0).",
+        )
+
+    def test_count_one_returns_single_result(self):
+        """count=1 should return exactly one result entry."""
+        _, results, _ = self._ping("8.8.8.8", count=1)
+        self.assertEqual(len(results), 1, "count=1 should produce exactly one result.")
+
+    def test_time_sleep_called_between_packets(self):
+        """time.sleep should be called count-1 times for count > 1."""
+        with patch("core.network.time.sleep") as mock_sleep:
+            self.nm.ping("8.8.8.8", count=3)
+        self.assertEqual(
+            mock_sleep.call_count,
+            2,
+            "time.sleep should be called count-1=2 times for count=3.",
+        )
+
+    def test_time_sleep_not_called_for_count_one(self):
+        """time.sleep should not be called when count=1 (no inter-packet delay)."""
+        with patch("core.network.time.sleep") as mock_sleep:
+            self.nm.ping("8.8.8.8", count=1)
+        mock_sleep.assert_not_called()
+
+    def test_unknown_host_still_returns_count_results(self):
+        """An unrecognised IP should still produce exactly count result entries."""
+        with patch("core.network.time.sleep"):
+            _, results, _ = self.nm.ping("203.0.113.1", count=3, timeout=9999)
+        self.assertEqual(
+            len(results),
+            3,
+            "ping to an unknown host should still return count result entries.",
+        )
+
+    def test_unknown_host_hostname_is_target_string(self):
+        """For an unknown host the returned hostname should equal the target."""
+        with patch("core.network.time.sleep"):
+            _, _, hostname = self.nm.ping("203.0.113.99", count=1)
+        self.assertEqual(
+            hostname,
+            "203.0.113.99",
+            "hostname returned for an unknown IP should be the target string.",
+        )
+
+    def test_local_subnet_host_succeeds_with_large_timeout(self):
+        """192.168.1.x hosts (rtt_base=2 ms) should succeed with a large timeout."""
+        with patch("core.network.time.sleep"):
+            success, results, _ = self.nm.ping("192.168.1.50", count=2, timeout=9999)
+        self.assertTrue(success, "Local subnet ping should succeed with a large timeout.")
+        self.assertTrue(
+            all(r["success"] for r in results),
+            "All local-subnet packets should be marked successful with a large timeout.",
+        )
+
+    def test_local_subnet_host_fails_with_zero_timeout(self):
+        """192.168.1.x hosts (rtt_base=2 ms) should fail with timeout=0."""
+        with patch("core.network.time.sleep"):
+            success, results, _ = self.nm.ping("192.168.1.50", count=2, timeout=0)
+        self.assertFalse(success, "Local subnet ping should fail with timeout=0.")
+
+
+# ---------------------------------------------------------------------------
+# NetworkManager — hostname boundary cases
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerHostnameBoundary(BaseTestCase):
+    """Boundary tests for set_hostname length validation."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def test_set_hostname_exactly_64_chars_succeeds(self):
+        """A hostname of exactly 64 characters should be accepted."""
+        name = "a" * 64
+        result = self.nm.set_hostname(name)
+        self.assertTrue(result, "set_hostname should accept a 64-character hostname.")
+        self.assertEqual(
+            self.nm.get_hostname(),
+            name,
+            "get_hostname should reflect a 64-character hostname.",
+        )
+
+    def test_set_hostname_65_chars_rejected(self):
+        """A hostname of 65 characters should be rejected."""
+        result = self.nm.set_hostname("a" * 65)
+        self.assertFalse(result, "set_hostname should reject a 65-character hostname.")
+
+    def test_set_hostname_empty_string_succeeds(self):
+        """An empty hostname string is within the 64-char limit and should be accepted."""
+        result = self.nm.set_hostname("")
+        self.assertTrue(result, "set_hostname should accept an empty string.")
+
+    def test_set_hostname_single_char_succeeds(self):
+        """A single-character hostname should be accepted."""
+        result = self.nm.set_hostname("x")
+        self.assertTrue(result, "set_hostname should accept a single-character hostname.")
+        self.assertEqual(self.nm.get_hostname(), "x")
+
+
+# ---------------------------------------------------------------------------
+# NetworkManager — resolve_hostname additional targets
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerResolutionExtra(BaseTestCase):
+    """Additional tests for resolve_hostname well-known names."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def test_resolve_google_com(self):
+        """resolve_hostname('google.com') should return '8.8.8.8'."""
+        self.assertEqual(self.nm.resolve_hostname("google.com"), "8.8.8.8")
+
+    def test_resolve_cloudflare_com(self):
+        """resolve_hostname('cloudflare.com') should return '1.1.1.1'."""
+        self.assertEqual(self.nm.resolve_hostname("cloudflare.com"), "1.1.1.1")
+
+    def test_resolve_github_com(self):
+        """resolve_hostname('github.com') should return '140.82.121.3'."""
+        self.assertEqual(self.nm.resolve_hostname("github.com"), "140.82.121.3")
+
+    def test_resolve_python_org(self):
+        """resolve_hostname('python.org') should return '151.101.1.69'."""
+        self.assertEqual(self.nm.resolve_hostname("python.org"), "151.101.1.69")
+
+    def test_resolve_returns_string_for_known_hosts(self):
+        """resolve_hostname for any known host should return a non-empty string."""
+        for name in ("google.com", "cloudflare.com", "github.com", "python.org"):
+            result = self.nm.resolve_hostname(name)
+            self.assertIsInstance(result, str, f"resolve_hostname('{name}') should return a string.")
+            self.assertTrue(len(result) > 0, f"resolve_hostname('{name}') should not be empty.")
+
+
+# ---------------------------------------------------------------------------
+# NetworkManager — list_interfaces return type
+# ---------------------------------------------------------------------------
+
+class TestNetworkManagerInterfaceList(BaseTestCase):
+    """Tests for list_interfaces return type and content guarantees."""
+
+    def setUp(self):
+        super().setUp()
+        self.nm = NetworkManager()
+
+    def test_list_interfaces_returns_list(self):
+        """list_interfaces should return a list, not a generator or other iterable."""
+        result = self.nm.list_interfaces()
+        self.assertIsInstance(result, list, "list_interfaces should return a list.")
+
+    def test_list_interfaces_count_is_two_by_default(self):
+        """Default setup should include exactly 2 interfaces (lo and eth0)."""
+        result = self.nm.list_interfaces()
+        self.assertEqual(len(result), 2, "Default interface count should be 2 (lo + eth0).")
+
+    def test_list_interfaces_elements_are_network_interface(self):
+        """All elements returned by list_interfaces should be NetworkInterface instances."""
+        from core.network import NetworkInterface
+        for iface in self.nm.list_interfaces():
+            self.assertIsInstance(
+                iface,
+                NetworkInterface,
+                f"list_interfaces element {iface!r} should be a NetworkInterface.",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
