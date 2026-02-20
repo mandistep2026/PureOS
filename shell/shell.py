@@ -4309,7 +4309,7 @@ class AwkCommand(ShellCommand):
                 if m:
                     expr = m.group(1).strip()
                     if not expr:
-                        print(env['$0'])
+                        print(env['$0'] + env['ORS'], end='')
                     else:
                         parts = [p.strip() for p in expr.split(',')]
                         expanded = []
