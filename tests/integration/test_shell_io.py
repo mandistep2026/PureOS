@@ -130,7 +130,7 @@ class TestPipeSupport(BaseTestCase):
         """cat | grep | sort: three-stage pipeline produces correct output."""
         self.assertShellSuccess(
             self.shell,
-            "cat /tmp/pipe_src.txt | grep a | sort > /tmp/pipe_multi.txt",
+            "cat /tmp/pipe_src.txt | grep al | sort > /tmp/pipe_multi.txt",
         )
         content = self.fs.read_file("/tmp/pipe_multi.txt")
         self.assertIn(b"alpha", content)
