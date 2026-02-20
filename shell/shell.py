@@ -2786,14 +2786,28 @@ class SortCommand(ShellCommand):
     def execute(self, args: List[str], shell) -> int:
         reverse = False
         unique = False
+        numeric = False
         filenames: List[str] = []
 
         for arg in args:
-            if arg == '-r':
-                reverse = True
-            elif arg == '-u':
-                unique = True
-            elif arg.startswith('-'):
+            if arg.startswith('-') and len(arg) > 1 and not arg.startswith('--'):
+                # Handle combined flags like -ru, -rn, -nu, -rnu, etc.
+                flags = arg[1:]
+                valid_flags = set('runR')
+                for ch in flags:
+                    if ch == 'r':
+                        reverse = True
+                    elif ch == 'u':
+                        unique = True
+                    elif ch == 'n':
+                        numeric = True
+                    elif ch == 'R':
+                        # random sort — treat as no-op for compatibility
+                        pass
+                    else:
+                        print(f"sort: invalid option -- '{ch}'")
+                        return 1
+            elif arg.startswith('--'):
                 print(f"sort: invalid option -- '{arg}'")
                 return 1
             else:
@@ -2813,7 +2827,16 @@ class SortCommand(ShellCommand):
                 lines = content.decode('utf-8', errors='replace').splitlines()
                 all_lines.extend(lines)
 
-        sorted_lines = sorted(all_lines, reverse=reverse)
+        if numeric:
+            def _numeric_key(line: str):
+                try:
+                    return (0, float(line.strip()))
+                except ValueError:
+                    return (1, line)
+            sorted_lines = sorted(all_lines, key=_numeric_key, reverse=reverse)
+        else:
+            sorted_lines = sorted(all_lines, reverse=reverse)
+
         if unique:
             deduped: List[str] = []
             prev = None
