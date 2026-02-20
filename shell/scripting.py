@@ -336,23 +336,70 @@ class ScriptExecutor:
         return exit_code
     
     def _collect_command(self, tokens: List[Token], start: int) -> tuple:
-        """Collect tokens for a single command/statement."""
+        """Collect tokens for a single command/statement.
+
+        For multi-line control structures (if/fi, while/done, for/done,
+        case/esac, function bodies), we collect across newlines until the
+        matching terminator is seen.
+        """
+        # Peek at first non-newline token to detect block starters
+        peek = start
+        while peek < len(tokens) and tokens[peek].type == TokenType.NEWLINE:
+            peek += 1
+
+        if peek < len(tokens) and tokens[peek].type != TokenType.EOF:
+            first_val = tokens[peek].value
+
+            # Map openers to their terminators (and depth-incrementing keywords)
+            block_map = {
+                'if':    ('fi',   {'if'}),
+                'while': ('done', {'while', 'for'}),
+                'for':   ('done', {'while', 'for'}),
+                'case':  ('esac', {'case'}),
+                'function': ('}', {'{'}),
+            }
+
+            if first_val in block_map:
+                terminator, depth_words = block_map[first_val]
+                cmd_tokens = []
+                i = start
+                depth = 0
+                while i < len(tokens):
+                    tok = tokens[i]
+                    if tok.type == TokenType.EOF:
+                        break
+                    if tok.type == TokenType.NEWLINE:
+                        # Keep newlines inside block so sub-parsers can use them
+                        cmd_tokens.append(tok)
+                        i += 1
+                        continue
+                    if tok.value in depth_words:
+                        depth += 1
+                    elif tok.value == terminator:
+                        if depth > 1:
+                            depth -= 1
+                        else:
+                            cmd_tokens.append(tok)
+                            i += 1
+                            break
+                    cmd_tokens.append(tok)
+                    i += 1
+                # Strip leading/trailing newline tokens
+                return [t for t in cmd_tokens if t.type != TokenType.NEWLINE or
+                        any(t2.type != TokenType.NEWLINE for t2 in cmd_tokens)], i
+
+        # Default: collect until end of line
         cmd_tokens = []
         i = start
-        
         while i < len(tokens):
             token = tokens[i]
-            
             if token.type == TokenType.NEWLINE:
                 i += 1
                 break
-            
             if token.type == TokenType.EOF:
                 break
-            
             cmd_tokens.append(token)
             i += 1
-        
         return cmd_tokens, i
     
     def _execute_statement(self, tokens: List[Token]) -> int:
