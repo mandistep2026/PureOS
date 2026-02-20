@@ -582,23 +582,39 @@ class ScriptExecutor:
     def _execute_case(self, tokens: List[Token]) -> int:
         """Execute case statement.
         Format: case WORD in
-                  pattern1) cmd1 ;; pattern2) cmd2 ;; *) default ;;
+                  pattern1) cmd1 ;; pattern2) cmd2 ;;
+                  *) default ;;
                 esac
+
+        Works with the actual tokenizer output:
+        - 'apple)' may appear as one WORD token or as WORD('apple') + WORD(')')
+        - ';' semicolons appear as NEWLINE tokens
+        - '*' appears as OPERATOR token
         """
         import fnmatch as _fnmatch
 
-        if len(tokens) < 4:
+        if len(tokens) < 3:
             print("bash: syntax error in case statement")
             return 1
 
-        # tokens[0] = 'case', tokens[1] = word, tokens[2] = 'in', ..., last = 'esac'
-        word = self.vars.expand(tokens[1].value)
+        # Find the VARIABLE or WORD token that is the case word
+        # tokens[0] = 'case', tokens[1] = word (WORD or VARIABLE), then 'in'
+        word_tok = tokens[1] if len(tokens) > 1 else None
+        if word_tok is None:
+            print("bash: syntax error in case statement")
+            return 1
 
-        # Find 'in' and 'esac'
+        from shell.scripting import TokenType as TT
+        if word_tok.type == TT.VARIABLE:
+            word = self.vars.get(word_tok.value) or ''
+        else:
+            word = self.vars.expand(word_tok.value)
+
+        # Find 'in' and 'esac' indices
         in_idx = None
         esac_idx = None
         for i, t in enumerate(tokens):
-            if t.value == 'in' and in_idx is None:
+            if t.value == 'in' and in_idx is None and i > 1:
                 in_idx = i
             elif t.value == 'esac':
                 esac_idx = i
@@ -609,34 +625,98 @@ class ScriptExecutor:
 
         body_tokens = tokens[in_idx + 1:esac_idx]
 
-        # Reconstruct body as a string and parse pattern) … ;; blocks
-        body_str = ' '.join(t.value for t in body_tokens)
+        # Parse clauses token-by-token.
+        # Each clause: <pattern_tokens> ')' <cmd_tokens> ';;'
+        # Patterns may be:
+        #   - "apple)"  — single WORD with trailing ')'
+        #   - WORD('apple') WORD(')')
+        #   - OPERATOR('*') WORD(')')
+        # ';;' is two consecutive NEWLINE(';') tokens, or a single ';' after cmd
 
-        # Split on ';;'
-        clauses = body_str.split(';;')
+        def is_double_semi(toks: List, idx: int) -> bool:
+            """Check if position idx starts a ';;' (two semicolons)."""
+            if idx >= len(toks):
+                return False
+            t = toks[idx]
+            # Single token ';;'
+            if t.value == ';;':
+                return True
+            # Two adjacent ';' tokens
+            if t.value == ';' and idx + 1 < len(toks) and toks[idx + 1].value == ';':
+                return True
+            return False
+
+        def skip_double_semi(toks: List, idx: int) -> int:
+            t = toks[idx]
+            if t.value == ';;':
+                return idx + 1
+            if t.value == ';' and idx + 1 < len(toks) and toks[idx + 1].value == ';':
+                return idx + 2
+            return idx + 1
+
+        # Skip leading whitespace/newlines
+        bi = 0
+        while bi < len(body_tokens) and body_tokens[bi].type == TT.NEWLINE:
+            bi += 1
+
         exit_code = 0
 
-        for clause in clauses:
-            clause = clause.strip()
-            if not clause:
-                continue
-            # Split on first ')'
-            paren_idx = clause.find(')')
-            if paren_idx == -1:
-                continue
-            patterns_str = clause[:paren_idx].strip()
-            cmd_str = clause[paren_idx + 1:].strip()
+        while bi < len(body_tokens):
+            # Collect pattern tokens (before ')')
+            pattern_parts = []
+            while bi < len(body_tokens):
+                tok = body_tokens[bi]
+                if tok.type == TT.NEWLINE:
+                    bi += 1
+                    continue
+                # Check for closing paren — end of pattern
+                if tok.value.endswith(')'):
+                    # The token itself may be "apple)" 
+                    pat_val = tok.value.rstrip(')')
+                    if pat_val:
+                        pattern_parts.append(pat_val)
+                    bi += 1
+                    break
+                if tok.value == ')':
+                    bi += 1
+                    break
+                pattern_parts.append(tok.value)
+                bi += 1
 
-            # Multiple patterns separated by |
-            patterns = [p.strip() for p in patterns_str.split('|')]
+            if not pattern_parts:
+                # No more clauses
+                break
+
+            # Collect command tokens until ';;' or esac-boundary
+            cmd_parts = []
+            while bi < len(body_tokens):
+                if is_double_semi(body_tokens, bi):
+                    bi = skip_double_semi(body_tokens, bi)
+                    break
+                tok = body_tokens[bi]
+                if tok.type != TT.NEWLINE:
+                    cmd_parts.append(tok.value)
+                bi += 1
+
+            # Skip trailing newlines
+            while bi < len(body_tokens) and body_tokens[bi].type == TT.NEWLINE:
+                bi += 1
+
+            # Check each pattern
             matched = False
-            for pat in patterns:
-                pat_expanded = self.vars.expand(pat)
-                if pat_expanded == '*' or _fnmatch.fnmatch(word, pat_expanded):
-                    matched = True
+            for raw_pat in pattern_parts:
+                # Handle | separators inside a single token e.g. "yes|y"
+                for pat in raw_pat.split('|'):
+                    pat = pat.strip()
+                    pat_expanded = self.vars.expand(pat)
+                    if pat_expanded == '*' or _fnmatch.fnmatch(word, pat_expanded):
+                        matched = True
+                        break
+                if matched:
                     break
 
             if matched:
+                cmd_str = ' '.join(cmd_parts).strip()
                 if cmd_str:
                     exit_code = self.shell.execute(cmd_str, save_to_history=False)
                 break
