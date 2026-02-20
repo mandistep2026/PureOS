@@ -785,35 +785,40 @@ class Shell:
         return self.last_exit_code
 
     def _parse_output_redirection(self, line: str) -> Tuple[str, Optional[str], bool]:
-        """Parse output redirection in a command line.
+        """Parse output redirection in a command line, quote-aware.
 
         Supports both spaced and unspaced forms:
         - echo hello > file.txt
         - echo hello>>file.txt
+        Does NOT strip quotes from the command portion.
         """
-        try:
-            lexer = shlex.shlex(line, posix=True, punctuation_chars='>')
-            lexer.whitespace_split = True
-            tokens = list(lexer)
-        except ValueError:
-            tokens = line.split()
-
-        for i, token in enumerate(tokens):
-            if token in (">", ">>"):
-                if i + 1 >= len(tokens):
-                    return "", None, False
-                command = " ".join(tokens[:i]).strip()
-                output_file = tokens[i + 1]
-                return command, output_file, token == ">>"
-
-            if token.startswith(">>") and len(token) > 2:
-                command = " ".join(tokens[:i]).strip()
-                return command, token[2:], True
-
-            if token.startswith(">") and len(token) > 1:
-                command = " ".join(tokens[:i]).strip()
-                return command, token[1:], False
-
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == '\\' and not in_single and i + 1 < len(line):
+                i += 2
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            elif ch == '>' and not in_single and not in_double:
+                append = (i + 1 < len(line) and line[i + 1] == '>')
+                op_len = 2 if append else 1
+                cmd_part = line[:i].rstrip()
+                rest = line[i + op_len:].lstrip()
+                # Extract the filename (first token of rest)
+                try:
+                    fname_tokens = shlex.split(rest)
+                except ValueError:
+                    fname_tokens = rest.split()
+                if not fname_tokens:
+                    return line, None, False
+                output_file = fname_tokens[0]
+                return cmd_part, output_file, append
+            i += 1
         return line, None, False
     
     def _execute_background(self, command_name: str, args: List[str], 
