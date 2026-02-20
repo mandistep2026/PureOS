@@ -79,10 +79,10 @@ class TestResolvectlStatusCommand(BaseTestCase):
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
         text = content.decode("utf-8", errors="replace")
-        state_pattern = re.compile(r"State:\s*(UP|DOWN)|Link\s+\S+\s+\((up|down)\)", re.IGNORECASE)
-        address_pattern = re.compile(r"Address(?:es)?:\s*\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}")
+        state_pattern = re.compile(r"Interface State:\\s*(UP|DOWN)", re.IGNORECASE)
+        cidr_pattern = re.compile(r"Interface CIDR:\\s*\\d{1,3}(?:\\.\\d{1,3}){3}/\\d{1,2}")
         self.assertRegex(text, state_pattern)
-        self.assertRegex(text, address_pattern)
+        self.assertRegex(text, cidr_pattern)
 
 
 if __name__ == "__main__":
