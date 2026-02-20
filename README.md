@@ -58,6 +58,8 @@ An operating system written entirely in Python using only the standard library. 
 - `unset` - Remove environment variables
 - `which` - Locate a command (supports `-a` to show all matches)
 - `type` - Describe command type (supports `-a` to show alias/builtin/path matches)
+- `basename` - Print path base name (optionally removing a suffix)
+- `dirname` - Print path directory name
 
 #### Text Editing
 - `nano <file>` - Edit files with built-in text editor

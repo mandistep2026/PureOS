@@ -771,6 +771,29 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 24: basename/dirname path utilities
+        print("Test 24: basename/dirname path utilities...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "basename" in shell.commands
+            assert "dirname" in shell.commands
+            assert shell.execute("basename /tmp/archive.tar.gz .gz > /tmp/base.txt") == 0
+            assert fs.read_file("/tmp/base.txt") == b"archive.tar\n"
+            assert shell.execute("basename /") == 0
+            assert shell.execute("dirname /tmp/archive.tar.gz > /tmp/dir.txt") == 0
+            assert fs.read_file("/tmp/dir.txt") == b"/tmp\n"
+            assert shell.execute("dirname file.txt > /tmp/dir_local.txt") == 0
+            assert fs.read_file("/tmp/dir_local.txt") == b".\n"
+            assert shell.execute("basename") == 1
+            assert shell.execute("dirname") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -810,6 +833,8 @@ def show_help():
     print("  unset     Remove environment variable")
     print("  which     Locate a command")
     print("  type      Describe command type")
+    print("  basename  Strip directory and suffix from path")
+    print("  dirname   Strip last path component")
     print("  sort      Sort lines in text files")
     print("  uniq      Filter adjacent duplicate lines")
     print("  cut       Extract selected fields from each line")

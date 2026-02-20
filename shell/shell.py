@@ -8,6 +8,7 @@ import shlex
 import time
 import fnmatch
 import re
+import posixpath
 from io import StringIO
 from typing import List, Dict, Callable, Optional, Tuple
 from pathlib import Path
@@ -160,6 +161,8 @@ class Shell:
         self.register_command(HistoryCommand())
         self.register_command(WhichCommand())
         self.register_command(TypeCommand())
+        self.register_command(BasenameCommand())
+        self.register_command(DirnameCommand())
         self.register_command(SleepCommand())
         self.register_command(SaveCommand())
         self.register_command(LoadCommand())
@@ -1487,6 +1490,56 @@ class TypeCommand(ShellCommand):
                 status = 1
 
         return status
+
+
+class BasenameCommand(ShellCommand):
+    """Extract filename portion of a path."""
+
+    def __init__(self):
+        super().__init__("basename", "Strip directory and suffix from path")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args or len(args) > 2:
+            print("basename: usage: basename <path> [suffix]")
+            return 1
+
+        path = args[0]
+        suffix = args[1] if len(args) == 2 else ""
+
+        stripped = path.rstrip("/")
+        if not stripped:
+            name = "/"
+        else:
+            name = posixpath.basename(stripped)
+
+        if suffix and name.endswith(suffix) and name != suffix:
+            name = name[:-len(suffix)]
+
+        print(name)
+        return 0
+
+
+class DirnameCommand(ShellCommand):
+    """Extract directory portion of a path."""
+
+    def __init__(self):
+        super().__init__("dirname", "Strip last path component")
+
+    def execute(self, args: List[str], shell) -> int:
+        if len(args) != 1:
+            print("dirname: usage: dirname <path>")
+            return 1
+
+        path = args[0]
+        stripped = path.rstrip("/")
+
+        if not stripped:
+            print("/")
+            return 0
+
+        directory = posixpath.dirname(stripped)
+        print(directory if directory else ".")
+        return 0
 
 
 class RebootCommand(ShellCommand):
