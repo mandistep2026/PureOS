@@ -489,3 +489,30 @@ class TestTrCommand(BaseTestCase):
         self.assertShellSuccess(
             self.shell, "tr 'a-z' 'A-Z' < /tmp/tr_input.txt"
         )
+
+
+class TestPasteCommand(BaseTestCase):
+    """Test: paste command."""
+
+    def setUp(self):
+        super().setUp()
+        self.shell = self.create_shell()
+        self.shell.fs.create_file('/tmp/paste_a.txt', b'a1\na2\na3\n')
+        self.shell.fs.create_file('/tmp/paste_b.txt', b'b1\nb2\n')
+
+    def test_paste_two_files_succeeds(self):
+        """paste merges files line-wise and returns 0."""
+        self.assertShellSuccess(self.shell, 'paste /tmp/paste_a.txt /tmp/paste_b.txt')
+
+    def test_paste_custom_delimiter_succeeds(self):
+        """paste -d uses custom delimiter and returns 0."""
+        self.assertShellSuccess(self.shell, 'paste -d : /tmp/paste_a.txt /tmp/paste_b.txt')
+
+    def test_paste_nonexistent_file_fails(self):
+        """paste on a missing file returns non-zero."""
+        self.assertShellFails(self.shell, 'paste /tmp/paste_a.txt /tmp/does_not_exist_paste.txt')
+
+    def test_paste_missing_operand_fails(self):
+        """paste with no files returns non-zero."""
+        self.assertShellFails(self.shell, 'paste')
+
