@@ -713,6 +713,35 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 22: Cut command
+        print("Test 22: Cut command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+
+            assert shell.execute("echo name:admin:1000 > /tmp/cut.txt") == 0
+            assert shell.execute("echo alice:user:1001 >> /tmp/cut.txt") == 0
+
+            assert shell.execute("cut -d : -f 1 /tmp/cut.txt > /tmp/cut_field1.txt") == 0
+            assert fs.read_file("/tmp/cut_field1.txt") == b"name\nalice\n"
+
+            assert shell.execute("cut -d : -f 2,3 /tmp/cut.txt > /tmp/cut_field23.txt") == 0
+            assert fs.read_file("/tmp/cut_field23.txt") == b"admin:1000\nuser:1001\n"
+
+            assert shell.execute("cut -d : -f 1-2 /tmp/cut.txt > /tmp/cut_range.txt") == 0
+            assert fs.read_file("/tmp/cut_range.txt") == b"name:admin\nalice:user\n"
+
+            assert shell.execute("cut -f 1 /tmp/cut.txt") == 0
+            assert shell.execute("cut -f x /tmp/cut.txt") == 1
+            assert shell.execute("cut -d : /tmp/cut.txt") == 1
+            assert shell.execute("cut -d : -f 1 /tmp/does-not-exist") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -754,6 +783,7 @@ def show_help():
     print("  type      Describe command type")
     print("  sort      Sort lines in text files")
     print("  uniq      Filter adjacent duplicate lines")
+    print("  cut       Extract selected fields from each line")
     print("  reboot    Reboot system")
     print("  shutdown  Power off")
     print("  exit      Exit shell")
