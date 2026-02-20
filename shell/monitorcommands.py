@@ -166,7 +166,7 @@ class IostatCommand(ShellCommand):
                 pass
 
         try:
-            collector = MetricsCollector(shell.kernel)
+            collector = MetricsCollector(shell.kernel, shell.fs)
         except Exception as e:
             print(f"iostat: metrics collector unavailable: {e}")
             return 1
@@ -294,7 +294,7 @@ class MpstatCommand(ShellCommand):
                 pass
 
         try:
-            collector = MetricsCollector(shell.kernel)
+            collector = MetricsCollector(shell.kernel, shell.fs)
         except Exception as e:
             print(f"mpstat: metrics collector unavailable: {e}")
             return 1
