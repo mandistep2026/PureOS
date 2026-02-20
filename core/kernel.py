@@ -160,6 +160,14 @@ class Kernel:
         self._kernel_thread: Optional[threading.Thread] = None
         self._boot_time: Optional[float] = None
         
+        # Monitoring / performance counters
+        self._io_stats = {'reads': 0, 'writes': 0, 'read_bytes': 0, 'write_bytes': 0}
+        self._cpu_ticks = {'user': 0.0, 'system': 0.0, 'idle': 0.0, 'iowait': 0.0}
+        self._context_switches = 0
+        self._interrupts = 0
+        self._perf_recording = False
+        self._perf_start = 0.0
+
         # Initialize new subsystems
         self.logger = None
         self.ipc_manager = None
