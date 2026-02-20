@@ -94,7 +94,6 @@ class PingCommand(ShellCommand):
 
         count = 4
         timeout = 2.0
-        target = args[-1]
 
         if "-c" in args:
             try:
@@ -108,13 +107,25 @@ class PingCommand(ShellCommand):
             try:
                 idx = args.index("-t")
                 timeout = float(args[idx + 1])
+                if timeout <= 0:
+                    raise ValueError
             except (ValueError, IndexError):
                 shell.print("ping: invalid timeout")
                 return 1
 
-        if target.startswith("-"):
+        # Collect indices consumed by flags so the target can be identified
+        # as the last argument not consumed by a flag pair.
+        flag_indices = set()
+        for flag in ("-c", "-t"):
+            if flag in args:
+                fi = args.index(flag)
+                flag_indices.update((fi, fi + 1))
+
+        positional = [a for i, a in enumerate(args) if i not in flag_indices]
+        if not positional or positional[-1].startswith("-"):
             shell.print("ping: usage: ping [-c count] [-t timeout] destination")
             return 1
+        target = positional[-1]
 
         target = self._resolve_target(target, shell)
 
