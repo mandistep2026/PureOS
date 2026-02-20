@@ -17,8 +17,16 @@ def test_monitoring_commands():
     print("=" * 60)
     
     # Initialize kernel and shell
+    from core.filesystem import FileSystem
+    from core.user import UserManager
+    from core.auth import Authenticator
+    
     kernel = Kernel()
-    shell = Shell(kernel)
+    kernel.start()
+    filesystem = FileSystem()
+    user_manager = UserManager(filesystem)
+    authenticator = Authenticator(user_manager)
+    shell = Shell(kernel, filesystem, authenticator, user_manager)
     
     # Generate some system activity
     print("\n[1/9] Generating system activity...")
