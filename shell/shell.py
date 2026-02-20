@@ -979,6 +979,39 @@ class Shell:
                 in_double = not in_double
             elif ch == '2' and not in_single and not in_double:
                 if i + 1 < len(line) and line[i + 1] == '>':
+                    # Handle 2>&1 specially
+                    if i + 2 < len(line) and line[i + 2] == '&':
+                        return line, None, False
+                    append = (i + 2 < len(line) and line[i + 2] == '>')
+                    op_len = 3 if append else 2
+                    cmd_part = (line[:i] + line[i + op_len:]).rstrip()
+                    rest = line[i + op_len:].lstrip()
+                    try:
+                        fname_tokens = shlex.split(rest)
+                    except ValueError:
+                        fname_tokens = rest.split()
+                    if not fname_tokens:
+                        return line, None, False
+                    return cmd_part, fname_tokens[0], append
+            i += 1
+        return line, None, False
+
+    def _parse_both_redirection(self, line: str) -> Tuple[str, Optional[str], bool]:
+        """Parse combined stdout/stderr redirection (&> file or &>> file)."""
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == '\\' and not in_single and i + 1 < len(line):
+                i += 2
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            elif ch == '&' and not in_single and not in_double:
+                if i + 1 < len(line) and line[i + 1] == '>':
                     append = (i + 2 < len(line) and line[i + 2] == '>')
                     op_len = 3 if append else 2
                     cmd_part = (line[:i] + line[i + op_len:]).rstrip()
