@@ -3129,3 +3129,553 @@ class SleepCommand(ShellCommand):
         except ValueError:
             print(f"sleep: invalid time interval '{args[0]}'")
             return 1
+
+
+# =============================================================================
+# v1.7 New Commands
+# =============================================================================
+
+class LnCommand(ShellCommand):
+    """Create hard or symbolic links."""
+
+    def __init__(self):
+        super().__init__("ln", "Create links between files")
+
+    def execute(self, args: List[str], shell) -> int:
+        symbolic = "-s" in args
+        paths = [a for a in args if not a.startswith("-")]
+
+        if len(paths) < 2:
+            print("ln: missing file operand")
+            print("Usage: ln [-s] <target> <link_name>")
+            return 1
+
+        target = paths[0]
+        link_name = paths[1]
+
+        if symbolic:
+            # Symlink: store target path in inode
+            from core.filesystem import Inode, FileType
+            import os as _os
+            link_path = shell.fs._normalize_path(link_name)
+            if shell.fs.exists(link_name):
+                print(f"ln: failed to create symlink '{link_name}': File exists")
+                return 1
+            parent_path = shell.fs._get_parent(link_path)
+            if parent_path not in shell.fs.inodes:
+                print(f"ln: cannot create symlink '{link_name}': No such directory")
+                return 1
+            inode = Inode(
+                name=_os.path.basename(link_path),
+                type=FileType.SYMLINK,
+                parent=parent_path,
+                content=b"",
+                permissions="rwxrwxrwx",
+                target=shell.fs._normalize_path(target),
+            )
+            shell.fs.inodes[link_path] = inode
+            shell.fs._add_to_parent(link_path, _os.path.basename(link_path))
+            return 0
+        else:
+            # Hard link: copy content (simplified)
+            content = shell.fs.read_file(target)
+            if content is None:
+                print(f"ln: failed to access '{target}': No such file or directory")
+                return 1
+            if not shell.fs.write_file(link_name, content):
+                print(f"ln: failed to create hard link '{link_name}'")
+                return 1
+            return 0
+
+
+class DiffCommand(ShellCommand):
+    """Compare files line by line."""
+
+    def __init__(self):
+        super().__init__("diff", "Compare files line by line")
+
+    def execute(self, args: List[str], shell) -> int:
+        # Options
+        unified = False
+        context_lines = 3
+        filtered = []
+        i = 0
+        while i < len(args):
+            if args[i] in ("-u", "--unified"):
+                unified = True
+            elif args[i].startswith("-U") and len(args[i]) > 2:
+                unified = True
+                try:
+                    context_lines = int(args[i][2:])
+                except ValueError:
+                    pass
+            elif args[i] == "-u" and i + 1 < len(args) and args[i+1].isdigit():
+                unified = True
+                context_lines = int(args[i+1])
+                i += 1
+            else:
+                filtered.append(args[i])
+            i += 1
+
+        if len(filtered) < 2:
+            print("diff: missing operand")
+            print("Usage: diff [-u] <file1> <file2>")
+            return 1
+
+        file1, file2 = filtered[0], filtered[1]
+        c1 = shell.fs.read_file(file1)
+        c2 = shell.fs.read_file(file2)
+
+        if c1 is None:
+            print(f"diff: {file1}: No such file or directory")
+            return 1
+        if c2 is None:
+            print(f"diff: {file2}: No such file or directory")
+            return 1
+
+        lines1 = c1.decode('utf-8', errors='replace').splitlines()
+        lines2 = c2.decode('utf-8', errors='replace').splitlines()
+
+        if lines1 == lines2:
+            return 0  # No differences
+
+        # Simple LCS-based diff
+        diff_lines = self._diff(lines1, lines2, file1, file2, unified, context_lines)
+        for line in diff_lines:
+            print(line)
+        return 1  # Differences found
+
+    def _diff(self, a, b, name_a, name_b, unified, ctx):
+        """Produce unified or normal diff output."""
+        import time as _time
+        # Compute edit script using DP
+        ops = self._edit_ops(a, b)
+
+        if unified:
+            stamp = _time.strftime('%Y-%m-%d %H:%M:%S')
+            result = [f"--- {name_a}\t{stamp}", f"+++ {name_b}\t{stamp}"]
+            # Build hunks
+            hunks = []
+            current_hunk = []
+            old_ln = 0  # 1-based
+            new_ln = 0
+            hunk_old_start = 1
+            hunk_new_start = 1
+            i = 0
+            while i < len(ops):
+                op, line = ops[i]
+                if op == '=':
+                    old_ln += 1
+                    new_ln += 1
+                    current_hunk.append((' ', line))
+                elif op == '-':
+                    old_ln += 1
+                    current_hunk.append(('-', line))
+                elif op == '+':
+                    new_ln += 1
+                    current_hunk.append(('+', line))
+                i += 1
+            # Trim context and emit
+            changes = [i for i, (t, _) in enumerate(current_hunk) if t != ' ']
+            if not changes:
+                return result
+            groups = []
+            g_start = max(0, changes[0] - ctx)
+            g_end = min(len(current_hunk), changes[0] + 1 + ctx)
+            for c in changes[1:]:
+                if c - ctx <= g_end:
+                    g_end = min(len(current_hunk), c + 1 + ctx)
+                else:
+                    groups.append((g_start, g_end))
+                    g_start = max(0, c - ctx)
+                    g_end = min(len(current_hunk), c + 1 + ctx)
+            groups.append((g_start, g_end))
+            # Compute line numbers per group
+            for gs, ge in groups:
+                old_s = 1 + sum(1 for t, _ in current_hunk[:gs] if t in ('=', '-', ' '))
+                new_s = 1 + sum(1 for t, _ in current_hunk[:gs] if t in ('=', '+', ' '))
+                old_count = sum(1 for t, _ in current_hunk[gs:ge] if t in (' ', '-'))
+                new_count = sum(1 for t, _ in current_hunk[gs:ge] if t in (' ', '+'))
+                result.append(f"@@ -{old_s},{old_count} +{new_s},{new_count} @@")
+                for t, ln in current_hunk[gs:ge]:
+                    prefix = ' ' if t == '=' else t
+                    result.append(f"{prefix}{ln}")
+            return result
+        else:
+            # Normal diff
+            result = []
+            ops = self._edit_ops(a, b)
+            i = 0
+            while i < len(ops):
+                op, line = ops[i]
+                if op == '-':
+                    j = i
+                    while j < len(ops) and ops[j][0] == '-':
+                        j += 1
+                    if j < len(ops) and ops[j][0] == '+':
+                        k = j
+                        while k < len(ops) and ops[k][0] == '+':
+                            k += 1
+                        result.append(f"{i+1}c{j+1}")
+                        for _, l in ops[i:j]:
+                            result.append(f"< {l}")
+                        result.append("---")
+                        for _, l in ops[j:k]:
+                            result.append(f"> {l}")
+                        i = k
+                    else:
+                        result.append(f"{i+1}d{i}")
+                        for _, l in ops[i:j]:
+                            result.append(f"< {l}")
+                        i = j
+                elif op == '+':
+                    j = i
+                    while j < len(ops) and ops[j][0] == '+':
+                        j += 1
+                    result.append(f"{i}a{i+1}")
+                    for _, l in ops[i:j]:
+                        result.append(f"> {l}")
+                    i = j
+                else:
+                    i += 1
+            return result
+
+    def _edit_ops(self, a, b):
+        """Compute edit operations using LCS."""
+        m, n = len(a), len(b)
+        # dp[i][j] = LCS length of a[:i] and b[:j]
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if a[i-1] == b[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        # Backtrack
+        ops = []
+        i, j = m, n
+        while i > 0 or j > 0:
+            if i > 0 and j > 0 and a[i-1] == b[j-1]:
+                ops.append(('=', a[i-1]))
+                i -= 1; j -= 1
+            elif j > 0 and (i == 0 or dp[i][j-1] >= dp[i-1][j]):
+                ops.append(('+', b[j-1]))
+                j -= 1
+            else:
+                ops.append(('-', a[i-1]))
+                i -= 1
+        ops.reverse()
+        return ops
+
+
+class TeeCommand(ShellCommand):
+    """Read from stdin and write to both stdout and files."""
+
+    def __init__(self):
+        super().__init__("tee", "Read stdin and write to stdout and files")
+
+    def execute(self, args: List[str], shell) -> int:
+        append = "-a" in args
+        files = [a for a in args if not a.startswith("-")]
+
+        lines = []
+        try:
+            while True:
+                line = sys.stdin.readline()
+                if not line:
+                    break
+                lines.append(line)
+                print(line, end='')
+        except EOFError:
+            pass
+
+        data = ''.join(lines).encode('utf-8')
+        for path in files:
+            if append and shell.fs.exists(path):
+                existing = shell.fs.read_file(path) or b""
+                shell.fs.write_file(path, existing + data)
+            else:
+                shell.fs.write_file(path, data)
+
+        return 0
+
+
+class TarCommand(ShellCommand):
+    """Archive files (virtual tar — stores in filesystem)."""
+
+    def __init__(self):
+        super().__init__("tar", "Create or extract file archives")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("tar: missing option")
+            print("Usage: tar -cf <archive> <files...>  (create)")
+            print("       tar -tf <archive>              (list)")
+            print("       tar -xf <archive> [-C <dir>]  (extract)")
+            return 1
+
+        # Parse flags (may be combined like -czf or positional like cf)
+        flags_raw = ""
+        remaining = []
+        for arg in args:
+            if arg.startswith("-"):
+                flags_raw += arg[1:]
+            else:
+                remaining.append(arg)
+
+        # Also handle non-dash combined flags (e.g. "tar cf archive dir")
+        if not flags_raw and remaining:
+            first = remaining[0]
+            if all(c in "cxtfvzC" for c in first):
+                flags_raw = first
+                remaining = remaining[1:]
+
+        create  = 'c' in flags_raw
+        extract = 'x' in flags_raw
+        list_   = 't' in flags_raw
+        verbose = 'v' in flags_raw
+
+        # Find archive file (-f flag means next arg / remaining[0])
+        archive = remaining[0] if remaining else None
+        sources = remaining[1:]
+
+        # -C <dir>
+        dest_dir = "."
+        if "-C" in args:
+            idx = args.index("-C")
+            if idx + 1 < len(args):
+                dest_dir = args[idx + 1]
+                sources = [s for s in sources if s != dest_dir]
+
+        if not archive:
+            print("tar: archive name required")
+            return 1
+
+        if create:
+            return self._create(shell, archive, sources, verbose)
+        elif list_:
+            return self._list(shell, archive, verbose)
+        elif extract:
+            return self._extract(shell, archive, dest_dir, verbose)
+        else:
+            print("tar: you must specify one of -c, -t, or -x")
+            return 1
+
+    def _create(self, shell, archive, sources, verbose):
+        """Create a simple tar-like archive stored as text in the VFS."""
+        import json as _json
+        members = {}
+
+        def collect(path):
+            norm = shell.fs._normalize_path(path)
+            if shell.fs.is_directory(norm):
+                entries = shell.fs.list_directory(norm)
+                if entries:
+                    for e in entries:
+                        child = norm.rstrip('/') + '/' + e.name
+                        collect(child)
+            elif shell.fs.is_file(norm):
+                data = shell.fs.read_file(norm)
+                if data is not None:
+                    import base64 as _b64
+                    members[norm] = _b64.b64encode(data).decode('ascii')
+                    if verbose:
+                        print(norm)
+
+        for src in sources:
+            collect(src)
+
+        payload = _json.dumps(members).encode('utf-8')
+        if not shell.fs.write_file(archive, payload):
+            print(f"tar: cannot create archive '{archive}'")
+            return 1
+        return 0
+
+    def _list(self, shell, archive, verbose):
+        import json as _json
+        data = shell.fs.read_file(archive)
+        if data is None:
+            print(f"tar: {archive}: No such file or directory")
+            return 1
+        try:
+            members = _json.loads(data.decode('utf-8'))
+            for path in members:
+                print(path)
+            return 0
+        except Exception:
+            print(f"tar: {archive}: not a valid archive")
+            return 1
+
+    def _extract(self, shell, archive, dest_dir, verbose):
+        import json as _json, base64 as _b64
+        data = shell.fs.read_file(archive)
+        if data is None:
+            print(f"tar: {archive}: No such file or directory")
+            return 1
+        try:
+            members = _json.loads(data.decode('utf-8'))
+            for orig_path, b64data in members.items():
+                # Rebase path under dest_dir
+                rel = orig_path.lstrip('/')
+                if dest_dir in ('.', '/'):
+                    target = '/' + rel
+                else:
+                    target = shell.fs._normalize_path(dest_dir + '/' + rel)
+                # Ensure parent dirs exist
+                parent = shell.fs._get_parent(target)
+                if parent and not shell.fs.exists(parent):
+                    shell.fs.mkdir(parent, parents=True)
+                content = _b64.b64decode(b64data)
+                shell.fs.write_file(target, content)
+                if verbose:
+                    print(target)
+            return 0
+        except Exception as e:
+            print(f"tar: extraction failed: {e}")
+            return 1
+
+
+class CronCommand(ShellCommand):
+    """Manage scheduled cron jobs."""
+
+    def __init__(self):
+        super().__init__("cron", "Manage scheduled jobs")
+        self._scheduler = None
+
+    def _get_scheduler(self, shell):
+        """Return the shared CronScheduler, creating it on first use."""
+        if not hasattr(shell, '_cron_scheduler') or shell._cron_scheduler is None:
+            from core.cron import CronScheduler
+            shell._cron_scheduler = CronScheduler(shell)
+            shell._cron_scheduler.start()
+        return shell._cron_scheduler
+
+    def execute(self, args: List[str], shell) -> int:
+        sched = self._get_scheduler(shell)
+        sub = args[0] if args else "list"
+
+        if sub == "list":
+            jobs = sched.list_jobs()
+            if not jobs:
+                print("No cron jobs scheduled.")
+                return 0
+            print(f"{'ID':<4} {'Name':<20} {'Interval':<10} {'Runs':<6} {'Last Run':<10} {'State'}")
+            print("-" * 70)
+            for job in jobs:
+                from core.cron import _fmt_interval
+                last = time.strftime('%H:%M:%S', time.localtime(job.last_run)) if job.last_run else "never"
+                nxt  = time.strftime('%H:%M:%S', time.localtime(job.next_run))
+                print(f"{job.job_id:<4} {job.name:<20} {_fmt_interval(job.interval):<10} "
+                      f"{job.run_count:<6} {last:<10} {job.state.value}")
+            return 0
+
+        elif sub == "add":
+            # cron add <name> <interval_seconds> <command...>
+            if len(args) < 4:
+                print("Usage: cron add <name> <interval_secs> <command>")
+                return 1
+            name = args[1]
+            try:
+                interval = float(args[2])
+                if interval <= 0:
+                    raise ValueError
+            except ValueError:
+                print("cron: interval must be a positive number (seconds)")
+                return 1
+            command = " ".join(args[3:])
+            job = sched.add_job(name, command, interval)
+            print(f"Cron job [{job.job_id}] '{name}' added (every {interval}s): {command}")
+            return 0
+
+        elif sub == "remove":
+            if len(args) < 2:
+                print("Usage: cron remove <job_id>")
+                return 1
+            try:
+                jid = int(args[1])
+            except ValueError:
+                print("cron: job_id must be an integer")
+                return 1
+            if sched.remove_job(jid):
+                print(f"Cron job [{jid}] removed.")
+                return 0
+            print(f"cron: no job with id {jid}")
+            return 1
+
+        elif sub == "pause":
+            if len(args) < 2:
+                print("Usage: cron pause <job_id>")
+                return 1
+            try:
+                jid = int(args[1])
+            except ValueError:
+                print("cron: job_id must be an integer")
+                return 1
+            if sched.pause_job(jid):
+                print(f"Cron job [{jid}] paused.")
+                return 0
+            print(f"cron: cannot pause job {jid}")
+            return 1
+
+        elif sub == "resume":
+            if len(args) < 2:
+                print("Usage: cron resume <job_id>")
+                return 1
+            try:
+                jid = int(args[1])
+            except ValueError:
+                print("cron: job_id must be an integer")
+                return 1
+            if sched.resume_job(jid):
+                print(f"Cron job [{jid}] resumed.")
+                return 0
+            print(f"cron: cannot resume job {jid}")
+            return 1
+
+        else:
+            print("Usage: cron [list|add|remove|pause|resume] ...")
+            print("  cron list")
+            print("  cron add <name> <interval_secs> <command>")
+            print("  cron remove <job_id>")
+            print("  cron pause  <job_id>")
+            print("  cron resume <job_id>")
+            return 1
+
+
+class TopCommand(ShellCommand):
+    """Display a dynamic real-time view of running processes."""
+
+    def __init__(self):
+        super().__init__("top", "Display real-time process information")
+
+    def execute(self, args: List[str], shell) -> int:
+        # Non-interactive snapshot (suitable for both terminal and redirection)
+        import time as _time
+
+        info = shell.kernel.get_system_info()
+        procs = shell.kernel.list_processes()
+
+        total_mem = info["total_memory"]
+        used_mem  = info["used_memory"]
+        free_mem  = info["free_memory"]
+        uptime    = shell.kernel.get_uptime()
+
+        days, rem = divmod(int(uptime), 86400)
+        hours, rem = divmod(rem, 3600)
+        mins, secs = divmod(rem, 60)
+        uptime_str = f"{days}d {hours:02d}:{mins:02d}:{secs:02d}" if days else f"{hours:02d}:{mins:02d}:{secs:02d}"
+
+        now = _time.strftime('%H:%M:%S')
+
+        print(f"top - {now} up {uptime_str},  {len(procs)} tasks")
+        print(f"Mem:  {total_mem//1024//1024}MB total, {used_mem//1024//1024}MB used, {free_mem//1024//1024}MB free")
+        print()
+        print(f"{'PID':<8} {'NAME':<18} {'STATE':<12} {'CPU':>5} {'MEM':>8}")
+        print("-" * 55)
+
+        for proc in sorted(procs, key=lambda p: p.pid):
+            mem_kb = proc.memory_usage // 1024
+            mem_pct = (proc.memory_usage / total_mem * 100) if total_mem else 0
+            print(f"{proc.pid:<8} {proc.name:<18} {proc.state.value:<12} {proc.cpu_time:>5.2f}s {mem_kb:>6}KB")
+
+        return 0
