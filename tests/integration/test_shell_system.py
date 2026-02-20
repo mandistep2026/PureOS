@@ -156,6 +156,42 @@ class TestVmstatCommand(BaseTestCase):
         self.assertIn("vmstat", self.shell.commands)
 
 
+class TestUptimeCommand(BaseTestCase):
+    """Integration tests for uptime command option handling."""
+
+    def setUp(self):
+        super().setUp()
+        self.shell = self.create_shell(start_kernel=True)
+        self.fs = self.shell.filesystem
+
+    def test_uptime_default_output(self):
+        """uptime default mode prints an up-prefixed duration."""
+        self.assertShellSuccess(self.shell, "uptime > /tmp/uptime_default.txt")
+        content = self.fs.read_file("/tmp/uptime_default.txt")
+        self.assertIsNotNone(content)
+        self.assertIn(b"up ", content)
+
+    def test_uptime_pretty_output(self):
+        """uptime -p prints a human readable duration."""
+        self.assertShellSuccess(self.shell, "uptime -p > /tmp/uptime_pretty.txt")
+        content = self.fs.read_file("/tmp/uptime_pretty.txt")
+        self.assertIsNotNone(content)
+        self.assertIn(b"up ", content)
+
+    def test_uptime_since_output(self):
+        """uptime -s prints boot timestamp in YYYY-MM-DD HH:MM:SS format."""
+        self.assertShellSuccess(self.shell, "uptime -s > /tmp/uptime_since.txt")
+        content = self.fs.read_file("/tmp/uptime_since.txt")
+        self.assertIsNotNone(content)
+        decoded = content.decode().strip()
+        self.assertRegex(decoded, r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+    def test_uptime_invalid_option_fails(self):
+        """uptime with unsupported option returns non-zero."""
+        self.assertShellFails(self.shell, "uptime --badflag")
+
+
+
 class TestNohupCommand(BaseTestCase):
     """Test 58: nohup command — run a command immune to hangups."""
 

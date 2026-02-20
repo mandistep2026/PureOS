@@ -2033,12 +2033,43 @@ class UptimeCommand(ShellCommand):
         super().__init__("uptime", "Tell how long the system has been running")
 
     def execute(self, args: List[str], shell) -> int:
+        pretty = False
+        show_since = False
+
+        for arg in args:
+            if arg in ("-p", "--pretty"):
+                pretty = True
+            elif arg in ("-s", "--since"):
+                show_since = True
+            else:
+                print(f"uptime: invalid option -- '{arg}'")
+                print("usage: uptime [-p|--pretty] [-s|--since]")
+                return 1
+
         uptime_seconds = shell.kernel.get_uptime()
         total_seconds = int(uptime_seconds)
+
+        if show_since:
+            since_ts = time.time() - uptime_seconds
+            print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(since_ts)))
+            return 0
 
         days, rem = divmod(total_seconds, 86400)
         hours, rem = divmod(rem, 3600)
         minutes, seconds = divmod(rem, 60)
+
+        if pretty:
+            parts = []
+            if days:
+                parts.append(f"{days} day{'s' if days != 1 else ''}")
+            if hours:
+                parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+            if minutes:
+                parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+            if seconds or not parts:
+                parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+            print(f"up {', '.join(parts)}")
+            return 0
 
         parts = []
         if days:
