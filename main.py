@@ -999,6 +999,281 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 34: sed command
+        print("Test 34: sed command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.execute("echo 'hello world' > /tmp/sed_in.txt")
+            shell.execute("echo 'foo bar' >> /tmp/sed_in.txt")
+            # Substitution
+            assert shell.execute("sed 's/hello/goodbye/' /tmp/sed_in.txt > /tmp/sed_out.txt") == 0
+            content = fs.read_file("/tmp/sed_out.txt")
+            assert content is not None
+            assert b"goodbye world" in content
+            assert b"foo bar" in content
+            # Delete matching lines
+            assert shell.execute("sed '/foo/d' /tmp/sed_in.txt > /tmp/sed_del.txt") == 0
+            deleted = fs.read_file("/tmp/sed_del.txt")
+            assert b"foo" not in deleted
+            assert b"hello" in deleted
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 35: awk command
+        print("Test 35: awk command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.execute("echo 'alice 30' > /tmp/awk_in.txt")
+            shell.execute("echo 'bob 25' >> /tmp/awk_in.txt")
+            shell.execute("echo 'carol 35' >> /tmp/awk_in.txt")
+            # Print second field
+            assert shell.execute("awk '{print $2}' /tmp/awk_in.txt > /tmp/awk_out.txt") == 0
+            content = fs.read_file("/tmp/awk_out.txt")
+            assert content is not None
+            assert b"30" in content
+            assert b"25" in content
+            assert b"35" in content
+            # Pattern match
+            assert shell.execute("awk '/bob/ {print $1}' /tmp/awk_in.txt > /tmp/awk_pat.txt") == 0
+            pat_content = fs.read_file("/tmp/awk_pat.txt")
+            assert b"bob" in pat_content
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 36: tr command
+        print("Test 36: tr command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.execute("echo 'hello world' > /tmp/tr_in.txt")
+            assert shell.execute("cat /tmp/tr_in.txt | tr a-z A-Z > /tmp/tr_out.txt") == 0
+            content = fs.read_file("/tmp/tr_out.txt")
+            assert content is not None
+            assert b"HELLO WORLD" in content
+            # Delete chars
+            assert shell.execute("cat /tmp/tr_in.txt | tr -d aeiou > /tmp/tr_del.txt") == 0
+            del_content = fs.read_file("/tmp/tr_del.txt")
+            assert b"hll wrld" in del_content
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 37: arithmetic expansion  $(( ))
+        print("Test 37: arithmetic expansion $(( ))...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo $((2 + 3)) > /tmp/arith_out.txt") == 0
+            content = fs.read_file("/tmp/arith_out.txt")
+            assert content is not None
+            assert b"5" in content
+            assert shell.execute("echo $((10 * 4 - 2)) > /tmp/arith2.txt") == 0
+            c2 = fs.read_file("/tmp/arith2.txt")
+            assert b"38" in c2
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 38: seq command
+        print("Test 38: seq command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("seq 1 5 > /tmp/seq_out.txt") == 0
+            content = fs.read_file("/tmp/seq_out.txt")
+            assert content is not None
+            assert b"1" in content and b"3" in content and b"5" in content
+            assert shell.execute("seq 2 2 10 > /tmp/seq2.txt") == 0
+            c2 = fs.read_file("/tmp/seq2.txt")
+            assert b"2" in c2 and b"4" in c2 and b"6" in c2 and b"10" in c2
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 39: bc calculator
+        print("Test 39: bc calculator...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo '6 * 7' | bc > /tmp/bc_out.txt") == 0
+            content = fs.read_file("/tmp/bc_out.txt")
+            assert content is not None
+            assert b"42" in content
+            assert shell.execute("bc 2 ** 10 > /tmp/bc2.txt") == 0
+            c2 = fs.read_file("/tmp/bc2.txt")
+            assert b"1024" in c2
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 40: xargs command
+        print("Test 40: xargs command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            shell.execute("echo '/tmp/xargs_a.txt /tmp/xargs_b.txt' > /tmp/xargs_list.txt")
+            # Use xargs to touch files from a list
+            assert shell.execute("echo '/tmp/xa /tmp/xb /tmp/xc' | xargs touch") == 0
+            assert fs.exists("/tmp/xa")
+            assert fs.exists("/tmp/xb")
+            assert fs.exists("/tmp/xc")
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 41: case..esac in scripting
+        print("Test 41: case..esac scripting...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            script = (
+                "#!/bin/sh\n"
+                "fruit=apple\n"
+                "case $fruit in\n"
+                "  apple) echo yummy ;;\n"
+                "  banana) echo sweet ;;\n"
+                "  *) echo unknown ;;\n"
+                "esac\n"
+            )
+            fs.write_file("/tmp/case_test.sh", script.encode())
+            assert shell.execute("bash /tmp/case_test.sh > /tmp/case_out.txt") == 0
+            content = fs.read_file("/tmp/case_out.txt")
+            assert content is not None
+            assert b"yummy" in content
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 42: expr command
+        print("Test 42: expr command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("expr 10 + 5 > /tmp/expr_out.txt") == 0
+            content = fs.read_file("/tmp/expr_out.txt")
+            assert content is not None
+            assert b"15" in content
+            assert shell.execute("expr 7 '*' 6 > /tmp/expr2.txt") == 0
+            c2 = fs.read_file("/tmp/expr2.txt")
+            assert b"42" in c2
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 43: cal command
+        print("Test 43: cal command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("cal > /tmp/cal_out.txt") == 0
+            content = fs.read_file("/tmp/cal_out.txt")
+            assert content is not None
+            # Should contain day abbreviations
+            assert any(d in content for d in [b"Mo", b"Su", b"Mon", b"Sun"])
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 44: mktemp command
+        print("Test 44: mktemp command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("mktemp > /tmp/mktemp_name.txt") == 0
+            name_content = fs.read_file("/tmp/mktemp_name.txt")
+            assert name_content is not None
+            tmpname = name_content.decode().strip()
+            assert tmpname.startswith("/tmp/")
+            assert fs.exists(tmpname)
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 45: printf command
+        print("Test 45: printf command...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("printf 'Hello %s\\n' World > /tmp/printf_out.txt") == 0
+            content = fs.read_file("/tmp/printf_out.txt")
+            assert content is not None
+            assert b"Hello World" in content
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 46: ${var:-default} parameter expansion
+        print("Test 46: parameter expansion (${var:-default})...")
+        try:
+            kernel = Kernel(); kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo ${NONEXISTENT:-fallback} > /tmp/param_out.txt") == 0
+            content = fs.read_file("/tmp/param_out.txt")
+            assert content is not None
+            assert b"fallback" in content
+            assert shell.execute("echo ${#HOME} > /tmp/param2.txt") == 0
+            c2 = fs.read_file("/tmp/param2.txt")
+            assert c2 is not None and len(c2.strip()) > 0
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
