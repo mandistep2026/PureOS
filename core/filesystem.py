@@ -40,6 +40,13 @@ class FileSystem:
     def __init__(self):
         self.inodes: Dict[str, Inode] = {}
         self.current_directory = "/"
+        self.total_reads = 0
+        self.total_writes = 0
+        self.read_bytes_total = 0
+        self.written_bytes_total = 0
+        self._last_snapshot_time = time.time()
+        self._last_read_bytes = 0
+        self._last_write_bytes = 0
         self._initialize_root()
     
     def _initialize_root(self) -> None:
