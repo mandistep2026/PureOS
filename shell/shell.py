@@ -767,6 +767,8 @@ class Shell:
         line_no_stdin, input_file = self._parse_input_redirection(line)
         # Parse output redirection
         line_cmd, output_file, append_mode = self._parse_output_redirection(line_no_stdin)
+        # Parse stderr redirection
+        line_cmd, err_file, err_append = self._parse_error_redirection(line_cmd)
 
         command_name, args = self.parse_input(line_cmd)
         if not command_name:
@@ -777,7 +779,9 @@ class Shell:
 
         old_stdin = sys.stdin
         old_stdout = sys.stdout
+        old_stderr = sys.stderr
         output_buffer = None
+        err_buffer = None
 
         # Set up stdin redirection
         if input_file is not None:
@@ -790,6 +794,9 @@ class Shell:
         if output_file and command_name in self.commands:
             output_buffer = StringIO()
             sys.stdout = output_buffer
+        if err_file and command_name in self.commands:
+            err_buffer = StringIO()
+            sys.stderr = err_buffer
 
         try:
             if command_name in self.commands:
@@ -797,11 +804,13 @@ class Shell:
                     self.last_exit_code = self.commands[command_name].execute(args, self)
                 except Exception as e:
                     sys.stdout = old_stdout
+                    sys.stderr = old_stderr
                     sys.stdin = old_stdin
                     print(f"Error: {e}")
                     self.last_exit_code = 1
             else:
                 sys.stdout = old_stdout
+                sys.stderr = old_stderr
                 sys.stdin = old_stdin
                 print(f"{command_name}: command not found")
                 self.last_exit_code = 127
@@ -818,11 +827,27 @@ class Shell:
                 if not self.fs.write_file(output_file, new_content):
                     print(f"Cannot write to '{output_file}'")
                     self.last_exit_code = 1
+
+            if err_file and err_buffer:
+                sys.stderr = old_stderr
+                err_content = err_buffer.getvalue()
+                existing_err = b""
+                if err_append and self.fs.exists(err_file):
+                    existing = self.fs.read_file(err_file)
+                    if existing:
+                        existing_err = existing
+                new_err = existing_err + err_content.encode('utf-8')
+                if not self.fs.write_file(err_file, new_err):
+                    print(f"Cannot write to '{err_file}'")
+                    self.last_exit_code = 1
         finally:
             sys.stdout = old_stdout
+            sys.stderr = old_stderr
             sys.stdin = old_stdin
             if output_buffer:
                 output_buffer.close()
+            if err_buffer:
+                err_buffer.close()
 
         return self.last_exit_code
 
