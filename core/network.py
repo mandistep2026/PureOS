@@ -236,6 +236,7 @@ class NetworkManager:
         self.tcp_sockets = TCPSocketTable()
         self.udp_sockets = UDPSocketTable()
         self.hostname = "pureos"
+        self.resolver_config = ResolverConfig()
         self._lock = threading.Lock()
         self._initialize_defaults()
 
