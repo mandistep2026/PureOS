@@ -641,6 +641,60 @@ class Shell:
         segments.append(''.join(current).strip())
         return segments
 
+    def _split_boolean_chains(self, line: str) -> Tuple[List[str], List[str]]:
+        """Split a command line on unquoted && and || operators."""
+        segments: List[str] = []
+        operators: List[str] = []
+        current: List[str] = []
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == '\\' and i + 1 < len(line) and not in_single:
+                current.append(ch)
+                current.append(line[i + 1])
+                i += 2
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            if not in_single and not in_double and i + 1 < len(line):
+                pair = line[i:i + 2]
+                if pair in ('&&', '||'):
+                    segments.append(''.join(current).strip())
+                    operators.append(pair)
+                    current = []
+                    i += 2
+                    continue
+            current.append(ch)
+            i += 1
+        segments.append(''.join(current).strip())
+        return segments, operators
+
+    def _execute_boolean_chain(self, segments: List[str], operators: List[str],
+                               background: bool = False) -> int:
+        """Execute command segments with &&/|| short-circuit semantics."""
+        last_exit = 0
+        for idx, segment in enumerate(segments):
+            segment = segment.strip()
+            if not segment:
+                continue
+
+            if idx > 0:
+                prev_op = operators[idx - 1]
+                if prev_op == '&&' and last_exit != 0:
+                    continue
+                if prev_op == '||' and last_exit == 0:
+                    continue
+
+            # Boolean segments can contain pipes, so reuse execute() path
+            last_exit = self.execute(segment, save_to_history=False)
+
+        self.last_exit_code = last_exit
+        return last_exit
+
     def _execute_pipeline(self, segments: List[str], background: bool = False) -> int:
         """Execute a pipeline of commands, connecting stdout → stdin."""
         pipeline_input: Optional[str] = None
