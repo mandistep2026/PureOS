@@ -4121,6 +4121,14 @@ class AwkCommand(ShellCommand):
             print("awk: no program given")
             return 1
 
+        def parse_pattern(text: str) -> Optional[str]:
+            if not text:
+                return None
+            token = text.strip()
+            if token.startswith('/') and token.endswith('/'):
+                return token[1:-1]
+            return None
+
         # Parse BEGIN, END, and pattern-action blocks
         begin_block = ''
         end_block   = ''
