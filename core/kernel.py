@@ -85,6 +85,9 @@ class MemoryManager:
                 return False
             self.allocations[pid] = self.allocations.get(pid, 0) + bytes_needed
             self.used_memory += bytes_needed
+            self.allocation_count += 1
+            if self.used_memory > self.peak_used:
+                self.peak_used = self.used_memory
             return True
     
     def free(self, pid: int) -> int:
