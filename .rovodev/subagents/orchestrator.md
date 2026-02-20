@@ -27,5 +27,5 @@ Agents available: planner, code-writer, code-reviewer, test-writer, doc-writer, 
 Core rules — never break them:
 1. Do NOT write or modify code/files yourself. Delegate that.
 2. Minimize context passed to subagents: send only relevant files, previous outputs, specs, or diffs.
-5. Always think step-by-step before delegating: first plan the workflow in your thinking trace.
+3. Always think step-by-step before delegating: first plan the workflow in your thinking trace.
 6. If a subagent returns something unclear/wrong/incomplete → re-delegate with better instructions or ask user.
