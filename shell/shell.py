@@ -5183,6 +5183,30 @@ class ExprCommand(ShellCommand):
             return 2
 
 
+class RevCommand(ShellCommand):
+    """Reverse characters in each input line."""
+
+    def __init__(self):
+        super().__init__("rev", "Reverse characters in each input line")
+
+    def execute(self, args: List[str], shell) -> int:
+        lines: List[str] = []
+        if args:
+            for filename in args:
+                data = shell.fs.read_file(filename)
+                if data is None:
+                    print(f"rev: {filename}: No such file or directory")
+                    return 1
+                lines.extend(data.decode('utf-8', errors='replace').splitlines())
+        else:
+            content = sys.stdin.read()
+            lines = content.splitlines()
+
+        for line in lines:
+            print(line[::-1])
+        return 0
+
+
 # ── v1.9 New Commands ─────────────────────────────────────────────────────────
 
 class GroupsCommand(ShellCommand):
