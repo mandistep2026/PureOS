@@ -489,9 +489,54 @@ class Shell:
         normalized = '/' + '/'.join(result)
         return normalized if normalized != '' else '/'
     
+    def _collect_heredoc(self, delimiter: str) -> str:
+        """Collect here-doc lines from the pending heredoc buffer or interactively."""
+        lines = []
+        if self._heredoc_lines:
+            # Already buffered from multi-line input
+            for line in self._heredoc_lines:
+                if line.strip() == delimiter:
+                    break
+                lines.append(line)
+            self._heredoc_lines = []
+        else:
+            # Interactive: read until delimiter
+            try:
+                while True:
+                    ln = input('> ')
+                    if ln.strip() == delimiter:
+                        break
+                    lines.append(ln)
+            except EOFError:
+                pass
+        return '\n'.join(lines) + '\n'
+
+    def _preprocess_heredoc(self, line: str):
+        """If line contains <<WORD, buffer the here-doc content and return (cmd, stdin_text)."""
+        import re as _re
+        m = _re.search(r'<<\s*([\'"]?)(\w+)\1', line)
+        if not m:
+            return line, None
+        delim = m.group(2)
+        cmd = line[:m.start()].strip()
+        # The heredoc content follows the command (from _heredoc_lines or interactively)
+        stdin_text = self._collect_heredoc(delim)
+        return cmd, stdin_text
+
     def execute(self, line: str, save_to_history: bool = True) -> int:
         """Execute a command line."""
         stripped = line.strip()
+
+        # Here-doc preprocessing  (cmd <<EOF … EOF)
+        if '<<' in stripped:
+            stripped, heredoc_stdin = self._preprocess_heredoc(stripped)
+            if heredoc_stdin is not None:
+                old_stdin = sys.stdin
+                sys.stdin = StringIO(heredoc_stdin)
+                try:
+                    return self.execute(stripped, save_to_history=save_to_history)
+                finally:
+                    sys.stdin = old_stdin
 
         # Check for background execution (&)
         background = False
