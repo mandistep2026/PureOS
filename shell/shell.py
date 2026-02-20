@@ -745,6 +745,52 @@ class Shell:
         self.last_exit_code = last_exit
         return last_exit
 
+    def _execute_case(self, line: str) -> int:
+        """Execute a case..esac statement.
+        Syntax: case WORD in pattern) commands ;; ... esac
+        """
+        import fnmatch as _fnmatch
+        # Strip 'case' keyword
+        rest = line[5:].strip()  # after 'case '
+        # Find 'in' keyword
+        in_idx = rest.find(' in ')
+        if in_idx == -1:
+            # Try 'in' at end of word token
+            parts = rest.split()
+            if len(parts) >= 2 and parts[1] == 'in':
+                word = parts[0]
+                body = rest[rest.index(' in ') + 4:].strip() if ' in ' in rest else ''
+            else:
+                print("case: syntax error: missing 'in'")
+                return 1
+        else:
+            word = rest[:in_idx].strip()
+            body = rest[in_idx + 4:].strip()
+
+        # Remove trailing 'esac'
+        if body.endswith('esac'):
+            body = body[:-4].strip()
+
+        # Split body into pattern/command pairs on ;;
+        pairs = body.split(';;')
+        for pair in pairs:
+            pair = pair.strip()
+            if not pair:
+                continue
+            # Split on first ')'
+            paren_idx = pair.find(')')
+            if paren_idx == -1:
+                continue
+            pattern = pair[:paren_idx].strip()
+            commands = pair[paren_idx + 1:].strip()
+            # Match pattern against word (support * wildcard)
+            if _fnmatch.fnmatch(word, pattern) or pattern == word:
+                if commands:
+                    return self.execute(commands, save_to_history=False)
+                return 0
+        # No match — success (silent)
+        return 0
+
     def _execute_pipeline(self, segments: List[str], background: bool = False) -> int:
         """Execute a pipeline of commands, connecting stdout → stdin."""
         pipeline_input: Optional[str] = None
