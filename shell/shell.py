@@ -264,6 +264,29 @@ class Shell:
         except ImportError:
             pass
 
+        # v2.1 System Monitoring & Diagnostics
+        try:
+            from shell.monitorcommands import (
+                FreeEnhancedCommand,
+                IostatCommand,
+                MpstatCommand,
+                SysdiagCommand,
+                SyshealthCommand,
+                PerfCommand,
+                HtopCommand
+            )
+            # Enhanced free command (replaces basic one)
+            self.commands['free'] = FreeEnhancedCommand()
+            # New monitoring commands
+            self.commands['iostat'] = IostatCommand()
+            self.commands['mpstat'] = MpstatCommand()
+            self.commands['sysdiag'] = SysdiagCommand()
+            self.commands['syshealth'] = SyshealthCommand()
+            self.commands['perf'] = PerfCommand()
+            self.commands['htop'] = HtopCommand()
+        except ImportError as e:
+            pass  # Monitoring commands not available
+
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""
         self.commands[command.name] = command
