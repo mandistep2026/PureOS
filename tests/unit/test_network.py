@@ -6,14 +6,17 @@ Unit tests for the :class:`~core.network.NetworkManager` class.
 Covers (Test 8 from main.py):
 - Default hostname retrieval and mutation
 - Interface discovery and IP address verification
-- Ping simulation (success flag and result count)
+- Ping simulation (success flag, result count, timeout behaviour)
+- PingCommand: -c flag, -t timeout flag, missing-arg error handling
 - Additional: loopback interface, routing table, hostname validation
 """
 
 import unittest
+from unittest.mock import patch
 
 from tests.base import BaseTestCase
 from core.network import NetworkManager, NetworkInterface, NetworkState
+from shell.netcommand import PingCommand
 
 
 # ---------------------------------------------------------------------------
