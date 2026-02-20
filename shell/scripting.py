@@ -170,11 +170,17 @@ class ScriptLexer:
                     self.advance()
                 return Token(TokenType.NUMBER, ''.join(num), line)
             
-            # Operators
-            if self.current_char in '=!<>+-*/':
+            # Operators and pipeline/redirection symbols
+            if self.current_char in '=!<>+-*/|&':
                 op = self.current_char
                 self.advance()
-                if self.current_char == '=':
+                if op in ('<', '>') and self.current_char == op:
+                    op += self.current_char
+                    self.advance()
+                elif op in ('|', '&') and self.current_char == op:
+                    op += self.current_char
+                    self.advance()
+                elif self.current_char == '=':
                     op += self.current_char
                     self.advance()
                 return Token(TokenType.OPERATOR, op, line)
