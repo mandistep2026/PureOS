@@ -42,6 +42,16 @@ class PersistenceManager:
             True if successful, False otherwise
         """
         try:
+            # Collect DNS resolver config from shell's network manager
+            dns_config = {}
+            nm = getattr(shell, 'network_manager', None) if shell else None
+            if nm is not None:
+                rc = nm.get_resolver_config()
+                dns_config = {
+                    "nameservers": rc.nameservers,
+                    "search": rc.search,
+                }
+
             state = {
                 "version": "1.0",
                 "filesystem": self._serialize_filesystem(filesystem),
@@ -49,6 +59,7 @@ class PersistenceManager:
                 "aliases": getattr(shell, 'aliases', {}) if shell else {},
                 "history": getattr(shell, 'history', []) if shell else [],
                 "current_directory": filesystem.get_current_directory() if filesystem else "/",
+                "dns_config": dns_config,
             }
             
             with open(self.state_file, 'w') as f:
