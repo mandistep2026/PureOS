@@ -408,6 +408,22 @@ class NetworkManager:
         self.hostname = hostname
         return True
 
+    def get_resolver_config(self) -> ResolverConfig:
+        """Return the current DNS resolver configuration."""
+        return self.resolver_config
+
+    def set_resolver_config(self, config: ResolverConfig) -> None:
+        """Replace the DNS resolver configuration."""
+        self.resolver_config = config
+
+    def set_nameservers(self, nameservers: List[str]) -> None:
+        """Set the list of nameserver addresses."""
+        self.resolver_config.nameservers = list(nameservers)
+
+    def set_search_domains(self, domains: List[str]) -> None:
+        """Set the DNS search domain list."""
+        self.resolver_config.search = list(domains)
+
     def resolve_hostname(self, hostname: str) -> Optional[str]:
         if hostname in ("localhost", "pureos"):
             return "127.0.0.1"
