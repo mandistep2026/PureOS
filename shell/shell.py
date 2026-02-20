@@ -4238,10 +4238,71 @@ class AwkCommand(ShellCommand):
             expr = expr.replace('$0', env['$0'])
             return expr
 
+        def _coerce_number(value: str) -> Optional[float]:
+            try:
+                return float(value)
+            except ValueError:
+                return None
+
+        def eval_condition(expr: str) -> bool:
+            expr = expr.strip()
+            if not expr:
+                return False
+            expr = expand_vars(expr)
+            m = _re.match(r'^(.*?)\s*(==|!=|>=|<=|>|<)\s*(.*)$', expr)
+            if m:
+                left, op, right = m.group(1).strip(), m.group(2), m.group(3).strip()
+                left_num = _coerce_number(left)
+                right_num = _coerce_number(right)
+                if left_num is not None and right_num is not None:
+                    if op == '==':
+                        return left_num == right_num
+                    if op == '!=':
+                        return left_num != right_num
+                    if op == '>=':
+                        return left_num >= right_num
+                    if op == '<=':
+                        return left_num <= right_num
+                    if op == '>':
+                        return left_num > right_num
+                    if op == '<':
+                        return left_num < right_num
+                if op == '==':
+                    return left == right
+                if op == '!=':
+                    return left != right
+                if op == '>=':
+                    return left >= right
+                if op == '<=':
+                    return left <= right
+                if op == '>':
+                    return left > right
+                if op == '<':
+                    return left < right
+            return bool(expr)
+
         def run_action(action: str):
             for stmt in _re.split(r'[;\n]', action):
                 stmt = stmt.strip()
                 if not stmt:
+                    continue
+                # if (cond) { action }
+                m = _re.match(r'^if\s*\(([^)]*)\)\s*\{([^}]*)\}$', stmt)
+                if m:
+                    if eval_condition(m.group(1)):
+                        run_action(m.group(2))
+                    continue
+                # while (cond) { action }
+                m = _re.match(r'^while\s*\(([^)]*)\)\s*\{([^}]*)\}$', stmt)
+                if m:
+                    guard = m.group(1)
+                    body = m.group(2)
+                    iterations = 0
+                    while eval_condition(guard):
+                        run_action(body)
+                        iterations += 1
+                        if iterations > 10000:
+                            break
                     continue
                 # print [expr, ...]
                 m = _re.match(r'^print\b(.*)', stmt)
