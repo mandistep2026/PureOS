@@ -202,7 +202,7 @@ class Shell:
             from shell.netcommand import (
                 IfconfigCommand, PingCommand, NetstatCommand, IpCommand,
                 HostnameCommand, TracerouteCommand, DigCommand, NslookupCommand,
-                RouteCommand, ArpCommand
+                RouteCommand, ArpCommand, ResolvconfCommand
             )
             self.register_command(IfconfigCommand())
             self.register_command(PingCommand())
@@ -214,6 +214,7 @@ class Shell:
             self.register_command(NslookupCommand())
             self.register_command(RouteCommand())
             self.register_command(ArpCommand())
+            self.register_command(ResolvconfCommand())
         except:
             pass
 
