@@ -410,8 +410,11 @@ class NslookupCommand(ShellCommand):
         target = args[0]
         ip = self.nm.resolve_hostname(target)
 
-        shell.print("Server:     192.168.1.1")
-        shell.print("Address:    192.168.1.1#53")
+        rc = self.nm.get_resolver_config()
+        ns = rc.nameservers[0] if rc.nameservers else "127.0.0.1"
+
+        shell.print(f"Server:     {ns}")
+        shell.print(f"Address:    {ns}#53")
         shell.print("")
         if ip:
             shell.print(f"Name:   {target}")
