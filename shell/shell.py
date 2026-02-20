@@ -114,6 +114,7 @@ class Shell:
         self.register_command(HeadCommand())
         self.register_command(TailCommand())
         self.register_command(WcCommand())
+        self.register_command(CutCommand())
         self.register_command(SortCommand())
         self.register_command(UniqCommand())
         self.register_command(FindCommand())
@@ -1839,6 +1840,102 @@ class WcCommand(ShellCommand):
                 output_parts.append(str(totals['bytes']))
             output_parts.append('total')
             print(' '.join(output_parts))
+
+        return 0
+
+
+class CutCommand(ShellCommand):
+    """Extract sections from each line of files."""
+
+    def __init__(self):
+        super().__init__("cut", "Extract selected fields from each line of files")
+
+    def _parse_field_spec(self, spec: str) -> Optional[List[int]]:
+        fields = set()
+        for chunk in spec.split(','):
+            part = chunk.strip()
+            if not part:
+                return None
+
+            if '-' in part:
+                start_text, end_text = part.split('-', 1)
+                if not start_text.isdigit() or not end_text.isdigit():
+                    return None
+                start = int(start_text)
+                end = int(end_text)
+                if start <= 0 or end <= 0 or start > end:
+                    return None
+                for idx in range(start, end + 1):
+                    fields.add(idx)
+            else:
+                if not part.isdigit():
+                    return None
+                value = int(part)
+                if value <= 0:
+                    return None
+                fields.add(value)
+
+        return sorted(fields)
+
+    def execute(self, args: List[str], shell) -> int:
+        delimiter = '\t'
+        field_spec = None
+        filenames: List[str] = []
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == '-d':
+                if i + 1 >= len(args):
+                    print("cut: option requires an argument -- 'd'")
+                    return 1
+                delimiter = args[i + 1]
+                if delimiter == "":
+                    print("cut: the delimiter must be a single character")
+                    return 1
+                delimiter = delimiter[0]
+                i += 2
+            elif arg == '-f':
+                if i + 1 >= len(args):
+                    print("cut: option requires an argument -- 'f'")
+                    return 1
+                field_spec = args[i + 1]
+                i += 2
+            elif arg.startswith('-'):
+                print(f"cut: invalid option -- '{arg}'")
+                return 1
+            else:
+                filenames.append(arg)
+                i += 1
+
+        if field_spec is None:
+            print("cut: you must specify a list of fields with -f")
+            return 1
+
+        if not filenames:
+            print("cut: missing file operand")
+            return 1
+
+        fields = self._parse_field_spec(field_spec)
+        if not fields:
+            print(f"cut: invalid field list '{field_spec}'")
+            return 1
+
+        for filename in filenames:
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"cut: {filename}: No such file or directory")
+                return 1
+
+            text = content.decode('utf-8', errors='replace')
+            for line in text.splitlines():
+                parts = line.split(delimiter)
+                selected = []
+                for field_number in fields:
+                    index = field_number - 1
+                    if 0 <= index < len(parts):
+                        selected.append(parts[index])
+                print(delimiter.join(selected))
 
         return 0
 
