@@ -229,6 +229,7 @@ class Shell:
         self.register_command(YesCommand())
         self.register_command(StringsCommand())
         self.register_command(ExprCommand())
+        self.register_command(RevCommand())
         # v1.9 commands
         self.register_command(GroupsCommand())
         self.register_command(PstreeCommand())
