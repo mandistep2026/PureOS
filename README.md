@@ -407,6 +407,45 @@ When a background job completes, you'll see:
 [1]+  Done                    sleep 10
 ```
 
+## What's New in v1.9
+
+### System Information Commands
+- **`vmstat`** — Virtual memory statistics (memory, swap, CPU summary)
+- **`pstree`** — Display process hierarchy as an ASCII tree (`-p` shows PIDs)
+- **`lsof`** — List open files and processes (`-u user` to filter by owner)
+
+### User & Group Enhancements
+- **`groups [user]`** — Show group memberships for a user
+- **`/etc/passwd`** — Auto-populated from `UserManager` on boot and after user operations
+- **`/etc/group`** — Auto-populated with all groups including `sudo`, `disk`, `wheel`
+- New default system groups: `sudo` (gid 27), `disk` (gid 6), `wheel` (gid 10)
+
+### Archive Commands
+- **`zip archive.zip file [...]`** — Create a virtual zip archive
+- **`unzip [-d dir] archive.zip`** — Extract a virtual zip archive
+
+### File Utilities
+- **`dd if=src of=dst [bs=N] [count=N] [skip=N]`** — Copy and convert files block by block
+- **`nl [-b a|t|n] [-v N] [-i N] file`** — Number lines of files (default: number non-empty lines)
+- **`od [-x|-c|-d] file`** — Octal/hex/decimal/char dump of files
+- **`xxd file`** — Hex dump with ASCII sidebar; `-r` to reverse hex→binary
+- **`column [-t] [-s sep] file`** — Format input into aligned columns (table mode with `-t`)
+- **`install [-m mode] [-o owner] [-g group] [-d] src dst`** — Copy files with permissions
+
+### Process & Signal System
+- **Kernel signal system**: `SIGHUP`, `SIGINT`, `SIGQUIT`, `SIGKILL`, `SIGUSR1`, `SIGUSR2`, `SIGTERM`, `SIGCONT`, `SIGSTOP`, `SIGTSTP`
+- `kernel.send_signal(pid, Signal.SIGKILL)` — terminates process immediately
+- `kernel.send_signal(pid, Signal.SIGSTOP)` / `SIGCONT` — suspend / resume
+- `kernel.register_signal_handler(pid, signal, handler)` — custom per-process handlers
+- `kernel.get_pending_signals(pid)` — retrieve queued signals
+
+### Shell Utilities
+- **`nohup command`** — Run command immune to hangup; output appended to `~/nohup.out`
+- **`mount [device mountpoint]`** — Mount virtual filesystems (no args lists mounts)
+- **`umount mountpoint`** — Unmount a virtual filesystem
+- **`strace command`** — Simulated syscall trace with realistic output
+- **`install`** — Copy files and set attributes (mode, owner, group, create dirs with `-d`)
+
 ## Future Enhancements
 
 ## v1.8 Changelog
