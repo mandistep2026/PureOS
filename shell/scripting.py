@@ -439,7 +439,7 @@ class ScriptExecutor:
     
     def _execute_command(self, tokens: List[Token]) -> int:
         """Execute a simple command."""
-        # Build command line
+        # Build command line while preserving operators like | and redirections
         args = []
         for token in tokens:
             if token.type in (TokenType.WORD, TokenType.STRING):
@@ -448,18 +448,21 @@ class ScriptExecutor:
             elif token.type == TokenType.VARIABLE:
                 value = self.vars.get(token.value) or ''
                 args.append(value)
+            elif token.type == TokenType.OPERATOR:
+                args.append(token.value)
         
         if not args:
             return 0
         
-        # Check for variable assignment
-        if '=' in args[0] and not args[0].startswith('='):
+        # Check for variable assignment (only if no pipeline/redirection operators)
+        has_shell_ops = any(tok in ('|', '||', '&', '&&', '>', '>>', '<', '<<') for tok in args)
+        if not has_shell_ops and '=' in args[0] and not args[0].startswith('='):
             parts = args[0].split('=', 1)
             if len(parts) == 2 and parts[0].isidentifier():
                 self.vars.set(parts[0], parts[1])
                 return 0
         
-        # Execute via shell
+        # Execute via shell (shell handles pipes/redirections)
         cmd_line = ' '.join(args)
         return self.shell.execute(cmd_line, save_to_history=False)
     
