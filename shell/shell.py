@@ -1558,24 +1558,67 @@ class GrepCommand(ShellCommand):
         super().__init__("grep", "Search for patterns in files")
 
     def execute(self, args: List[str], shell) -> int:
-        if len(args) < 2:
-            print("Usage: grep <pattern> <file>")
+        ignore_case = False
+        invert_match = False
+        show_line_numbers = False
+        positional: List[str] = []
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--":
+                positional.extend(args[i + 1:])
+                break
+            if arg == "-i":
+                ignore_case = True
+            elif arg == "-v":
+                invert_match = True
+            elif arg == "-n":
+                show_line_numbers = True
+            elif arg.startswith("-"):
+                print(f"grep: invalid option -- '{arg}'")
+                return 1
+            else:
+                positional.append(arg)
+            i += 1
+
+        if len(positional) < 2:
+            print("Usage: grep [-i] [-n] [-v] <pattern> <file...>")
             return 1
 
-        pattern = args[0]
-        filename = args[1]
-
-        content = shell.fs.read_file(filename)
-        if content is None:
-            print(f"grep: {filename}: No such file or directory")
-            return 1
-
-        lines = content.decode('utf-8', errors='replace').splitlines()
+        pattern = positional[0]
+        filenames = positional[1:]
         found = False
 
-        for i, line in enumerate(lines, 1):
-            if pattern in line:
-                print(f"{filename}:{i}:{line}")
+        match_pattern = pattern.lower() if ignore_case else pattern
+        multiple_files = len(filenames) > 1
+
+        for filename in filenames:
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"grep: {filename}: No such file or directory")
+                return 1
+
+            lines = content.decode('utf-8', errors='replace').splitlines()
+            for line_number, line in enumerate(lines, 1):
+                candidate = line.lower() if ignore_case else line
+                is_match = match_pattern in candidate
+                if invert_match:
+                    is_match = not is_match
+
+                if not is_match:
+                    continue
+
+                prefixes: List[str] = []
+                if multiple_files:
+                    prefixes.append(filename)
+                if show_line_numbers:
+                    prefixes.append(str(line_number))
+
+                if prefixes:
+                    print(f"{':'.join(prefixes)}:{line}")
+                else:
+                    print(line)
                 found = True
 
         return 0 if found else 1
