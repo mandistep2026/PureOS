@@ -37,6 +37,15 @@ echo ""
 echo "Testing tail command (last 2 lines):"
 tail -n2 data.txt
 
+echo ""
+echo "Testing sed and awk:"
+echo "Using sed to insert a header and replace Line 3:"
+sed -e '1i Data Header' -e 's/Line 3/Line Three/' data.txt
+
+echo ""
+echo "Using awk to filter lines with numbers > 2:"
+awk '$2 > 2 { print "Line", $2 }' data.txt
+
 # Show command history
 echo ""
 echo "Command history:"
