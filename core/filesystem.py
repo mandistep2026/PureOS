@@ -263,6 +263,8 @@ class FileSystem:
         inode.content = content
         inode.size = len(content)
         inode.modified = time.time()
+        self.total_writes += 1
+        self.written_bytes_total += len(content)
         return True
     
     def read_file(self, path: str) -> Optional[bytes]:
