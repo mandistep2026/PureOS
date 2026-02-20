@@ -44,6 +44,15 @@ class TestResolvectlStatusCommand(BaseTestCase):
         self.assertIn(b"DNS Domain", content)
         self.assertIn(b"corp.local", content)
 
+    def test_resolvectl_status_reports_multiple_dns_domains(self):
+        self.shell.execute("resolvconf -s corp.local example.com")
+        self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
+        content = self.fs.read_file("/tmp/resolvectl_status.txt")
+        self.assertIsNotNone(content)
+        self.assertIn(b"DNS Domains", content)
+        self.assertIn(b"corp.local", content)
+        self.assertIn(b"example.com", content)
+
 
 if __name__ == "__main__":
     unittest.main()
