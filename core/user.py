@@ -148,12 +148,14 @@ class UserManager:
         self.fs.chown(home_dir, username, username)
     
     def _hash_password(self, password: str, salt: str) -> str:
-        """Hash password with salt using SHA-256."""
-        # Combine password and salt, hash multiple times for security
-        hash_value = password + salt
-        for _ in range(1000):  # 1000 iterations
-            hash_value = hashlib.sha256(hash_value.encode()).hexdigest()
-        return hash_value
+        """Hash password using PBKDF2-HMAC-SHA256 with 200,000 iterations."""
+        dk = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt.encode('utf-8'),
+            200_000  # OWASP recommended minimum for PBKDF2-SHA256
+        )
+        return dk.hex()
     
     def verify_password(self, username: str, password: str) -> bool:
         """Verify password for user."""
