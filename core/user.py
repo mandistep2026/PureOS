@@ -220,6 +220,7 @@ class UserManager:
                 self.fs.mkdir(home_dir, parents=True)
                 self.fs.chown(home_dir, username, username)
         
+        self._refresh_etc_files()
         return True, f"User '{username}' created successfully"
     
     def delete_user(self, username: str, remove_home: bool = False) -> Tuple[bool, str]:
