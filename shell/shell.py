@@ -10,7 +10,7 @@ import fnmatch
 import re
 import posixpath
 from io import StringIO
-from typing import List, Dict, Callable, Optional, Tuple
+from typing import List, Dict, Callable, Optional, Tuple, Any
 from pathlib import Path
 
 
