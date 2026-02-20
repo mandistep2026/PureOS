@@ -43,7 +43,7 @@ class FileSystem:
         self._initialize_root()
     
     def _initialize_root(self) -> None:
-        """Create root directory."""
+        """Create root directory and standard files."""
         root = Inode(
             name="/",
             type=FileType.DIRECTORY,
@@ -58,10 +58,33 @@ class FileSystem:
         self.mkdir("/home")
         self.mkdir("/tmp")
         self.mkdir("/var")
+        self.mkdir("/var/log")
         self.mkdir("/proc")
         self.mkdir("/proc/net")
         self.mkdir("/dev")
         self.mkdir("/root")
+        self.mkdir("/usr")
+        self.mkdir("/usr/bin")
+        self.mkdir("/usr/local")
+
+        # Populate standard system files
+        self.create_file("/etc/hostname", b"pureos\n")
+        self.create_file("/etc/motd", (
+            b"Welcome to PureOS v1.7!\n"
+            b"Type 'help' for available commands.\n"
+            b"Type 'pkg list -a' to see available packages.\n"
+        ))
+        self.create_file("/etc/shells", b"/bin/sh\n/bin/bash\n/bin/zsh\n")
+        self.create_file("/etc/os-release",
+            b'NAME="PureOS"\nVERSION="1.7"\nID=pureos\nPRETTY_NAME="PureOS 1.7"\n')
+        self.create_file("/proc/version",
+            b"PureOS 1.7 (python_vm) #1 SMP\n")
+        self.create_file("/proc/uptime", b"0.00 0.00\n")
+        self.create_file("/proc/net/dev",
+            b"Inter-|   Receive  |  Transmit\n"
+            b" face |bytes packets|bytes packets\n"
+            b"    lo:       0       0       0       0\n"
+            b"  eth0:       0       0       0       0\n")
     
     def _normalize_path(self, path: str) -> str:
         """Normalize a path to absolute form."""
