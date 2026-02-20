@@ -502,17 +502,20 @@ class TestPingCommand(BaseTestCase):
             "Statistics should report 0% packet loss when all packets succeed.",
         )
 
-    def test_output_packet_loss_100_on_zero_timeout(self):
+    def test_output_packet_loss_100_on_tiny_timeout(self):
         """Statistics line should report 100% packet loss when all packets fail."""
-        self._execute(["-c", "2", "-t", "0", "8.8.8.8"])
+        # Use 0.0001 s (0.1 ms threshold) — valid positive timeout that forces all
+        # 8.8.8.8 packets (rtt_base=25 ms) to fail.
+        self._execute(["-c", "2", "-t", "0.0001", "8.8.8.8"])
         self.assertTrue(
             any("100% packet loss" in line for line in self.shell.output),
             "Statistics should report 100% packet loss when all packets fail.",
         )
 
-    def test_t_and_c_combined_zero_timeout_returns_error(self):
-        """-c 1 -t 0 combination: exactly 1 result line and exit code 1."""
-        rc = self._execute(["-c", "1", "-t", "0", "8.8.8.8"])
+    def test_t_and_c_combined_tiny_timeout_returns_error(self):
+        """-c 1 -t 0.0001 combination: exactly 1 result line and exit code 1."""
+        # 0.0001 s = 0.1 ms threshold; 8.8.8.8 rtt_base=25 ms always exceeds it.
+        rc = self._execute(["-c", "1", "-t", "0.0001", "8.8.8.8"])
         result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
         self.assertEqual(len(result_lines), 1, "-c 1 should emit exactly 1 result line.")
         self.assertEqual(rc, 1, "Exit code should be 1 when all packets fail.")
