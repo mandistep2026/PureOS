@@ -101,6 +101,10 @@ class Shell:
     def filesystem(self):
         """Backward compatibility property for accessing filesystem."""
         return self.fs
+
+    def print(self, text: str = "") -> None:
+        """Print text through the shell output stream."""
+        print(text)
     
     def _register_commands(self) -> None:
         """Register all built-in commands."""
