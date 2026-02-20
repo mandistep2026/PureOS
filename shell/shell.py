@@ -4594,9 +4594,10 @@ class BcCommand(ShellCommand):
     def execute(self, args: List[str], shell) -> int:
         import math as _math
 
-        # If args given treat as expression, else read from stdin
-        if args and not args[0].startswith('-'):
-            lines = [' '.join(args)]
+        # If args given treat as expression (join all args), else read from stdin
+        non_flag_args = [a for a in args if not a.startswith('-')]
+        if non_flag_args:
+            lines = [' '.join(non_flag_args)]
         else:
             lines = sys.stdin.read().splitlines()
 
