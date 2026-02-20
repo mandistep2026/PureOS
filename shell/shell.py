@@ -4161,9 +4161,10 @@ class AwkCommand(ShellCommand):
                 remaining = remaining[m.end():]
                 continue
             # bare pattern without braces → print if matches
-            m = _re.match(r'^(/[^/]*/)([^/\{]*?)(?=\s*/|\s*$|\s+BEGIN|\s+END)', remaining, _re.DOTALL)
+            m = _re.match(r'^(/[^/]*/)(?=\s*(?:\{|\s*$))', remaining, _re.DOTALL)
             if m:
-                rules.append((m.group(1)[1:-1], 'print'))
+                pat = parse_pattern(m.group(1))
+                rules.append((pat, 'print'))
                 remaining = remaining[m.end():]
                 continue
             break
