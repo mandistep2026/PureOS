@@ -5,6 +5,7 @@ Integration tests for system information commands.
 
 Covers:
 - Test 33: top command
+- Test 34: du command
 - Test 50: pstree command
 - Test 51: vmstat command
 - Test 58: nohup command
@@ -84,6 +85,39 @@ class TestPstreeCommand(BaseTestCase):
         # A process tree representation typically contains at least one
         # recognisable character or keyword
         self.assertGreater(len(content), 0)
+
+
+class TestDuCommand(BaseTestCase):
+    """Integration tests for du command (disk usage estimates)."""
+
+    def setUp(self):
+        super().setUp()
+        self.shell = self.create_shell()
+        self.fs = self.shell.fs
+
+    def test_du_is_registered(self):
+        """du is present in the shell command table."""
+        self.assertIn("du", self.shell.commands)
+
+    def test_du_summarize_file(self):
+        """du -s reports usage for a single file path."""
+        self.assertShellSuccess(self.shell, "echo hello > /tmp/du_file.txt")
+        self.assertShellSuccess(self.shell, "du -s /tmp/du_file.txt > /tmp/du_sum_out.txt")
+        content = self.fs.read_file("/tmp/du_sum_out.txt")
+        self.assertIsNotNone(content)
+        self.assertIn(b"/tmp/du_file.txt", content)
+
+    def test_du_human_readable(self):
+        """du -h emits units in output."""
+        self.assertShellSuccess(self.shell, "echo hello > /tmp/du_hr.txt")
+        self.assertShellSuccess(self.shell, "du -h -s /tmp/du_hr.txt > /tmp/du_hr_out.txt")
+        content = self.fs.read_file("/tmp/du_hr_out.txt")
+        self.assertIsNotNone(content)
+        self.assertTrue(any(unit in content for unit in [b"B", b"K", b"M", b"G", b"T"]))
+
+    def test_du_missing_path_fails(self):
+        """du returns non-zero when given a non-existent path."""
+        self.assertShellFails(self.shell, "du /tmp/not-here")
 
 
 class TestVmstatCommand(BaseTestCase):
