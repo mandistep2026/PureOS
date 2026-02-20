@@ -5,6 +5,7 @@ Uses only Python standard library.
 """
 
 import hashlib
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
