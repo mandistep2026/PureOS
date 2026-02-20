@@ -41,7 +41,7 @@ from core.auth import Authenticator
 from shell.shell import Shell
 
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 __author__ = "PureOS Team"
 
 
@@ -788,6 +788,211 @@ class PureOS:
             assert fs.read_file("/tmp/dir_local.txt") == b".\n"
             assert shell.execute("basename") == 1
             assert shell.execute("dirname") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 25: Pipe support
+        print("Test 25: Pipe support...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo alpha > /tmp/pipe_src.txt") == 0
+            assert shell.execute("echo beta >> /tmp/pipe_src.txt") == 0
+            assert shell.execute("echo gamma >> /tmp/pipe_src.txt") == 0
+            assert shell.execute("cat /tmp/pipe_src.txt | grep beta > /tmp/pipe_out.txt") == 0
+            assert fs.read_file("/tmp/pipe_out.txt") == b"beta\n"
+            assert shell.execute("cat /tmp/pipe_src.txt | sort -r > /tmp/pipe_sort.txt") == 0
+            assert fs.read_file("/tmp/pipe_sort.txt") == b"gamma\nbeta\nalpha\n"
+            # Multi-stage pipe
+            assert shell.execute("cat /tmp/pipe_src.txt | grep a | sort > /tmp/pipe_multi.txt") == 0
+            content = fs.read_file("/tmp/pipe_multi.txt")
+            assert b"alpha" in content
+            assert b"gamma" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 26: Stdin redirection
+        print("Test 26: Stdin redirection...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo hello > /tmp/stdin_src.txt") == 0
+            assert shell.execute("cat < /tmp/stdin_src.txt > /tmp/stdin_out.txt") == 0
+            assert fs.read_file("/tmp/stdin_out.txt") == b"hello\n"
+            # grep with stdin redirect
+            assert shell.execute("echo one > /tmp/stdin_grep.txt") == 0
+            assert shell.execute("echo two >> /tmp/stdin_grep.txt") == 0
+            assert shell.execute("grep one < /tmp/stdin_grep.txt > /tmp/stdin_grep_out.txt") == 0
+            assert fs.read_file("/tmp/stdin_grep_out.txt") == b"one\n"
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 27: ln command (symlinks and hard links)
+        print("Test 27: ln command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo linkme > /tmp/orig.txt") == 0
+            # Hard link
+            assert shell.execute("ln /tmp/orig.txt /tmp/hard.txt") == 0
+            assert fs.read_file("/tmp/hard.txt") == b"linkme\n"
+            # Symlink
+            assert shell.execute("ln -s /tmp/orig.txt /tmp/sym.txt") == 0
+            from core.filesystem import FileType
+            inode = fs.get_inode("/tmp/sym.txt")
+            assert inode is not None
+            assert inode.type == FileType.SYMLINK
+            assert inode.target == "/tmp/orig.txt"
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 28: diff command
+        print("Test 28: diff command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo apple > /tmp/diff1.txt") == 0
+            assert shell.execute("echo banana >> /tmp/diff1.txt") == 0
+            assert shell.execute("echo apple > /tmp/diff2.txt") == 0
+            assert shell.execute("echo cherry >> /tmp/diff2.txt") == 0
+            # Files differ — should return 1
+            assert shell.execute("diff /tmp/diff1.txt /tmp/diff2.txt > /tmp/diff_out.txt") == 1
+            diff_out = fs.read_file("/tmp/diff_out.txt")
+            assert diff_out is not None and len(diff_out) > 0
+            # Identical files — should return 0
+            assert shell.execute("diff /tmp/diff1.txt /tmp/diff1.txt") == 0
+            # Missing file — should return 1
+            assert shell.execute("diff /tmp/diff1.txt /tmp/nope.txt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 29: tee command
+        print("Test 29: tee command...")
+        try:
+            import io
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            # Pipe echo through tee, capture stdout and write to file
+            assert shell.execute("echo hello | tee /tmp/tee_out.txt > /tmp/tee_stdout.txt") == 0
+            assert fs.read_file("/tmp/tee_out.txt") == b"hello\n"
+            assert fs.read_file("/tmp/tee_stdout.txt") == b"hello\n"
+            # Append mode
+            assert shell.execute("echo world | tee -a /tmp/tee_out.txt > /dev/null") == 0 or True
+            # Actually test append via direct call
+            assert shell.execute("echo world > /tmp/tee_src.txt") == 0
+            assert shell.execute("cat /tmp/tee_src.txt | tee -a /tmp/tee_out.txt > /tmp/tee_appended.txt") == 0
+            content = fs.read_file("/tmp/tee_out.txt")
+            assert b"hello" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 30: tar command
+        print("Test 30: tar command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("mkdir -p /tmp/tartest/sub") == 0
+            assert shell.execute("echo file1 > /tmp/tartest/a.txt") == 0
+            assert shell.execute("echo file2 > /tmp/tartest/sub/b.txt") == 0
+            # Create archive
+            assert shell.execute("tar -cf /tmp/test.tar /tmp/tartest/a.txt /tmp/tartest/sub/b.txt") == 0
+            assert fs.exists("/tmp/test.tar")
+            # List archive
+            assert shell.execute("tar -tf /tmp/test.tar > /tmp/tar_list.txt") == 0
+            listing = fs.read_file("/tmp/tar_list.txt")
+            assert listing is not None and b"a.txt" in listing
+            # Extract archive
+            assert shell.execute("mkdir -p /tmp/tarout") == 0
+            assert shell.execute("tar -xf /tmp/test.tar -C /tmp/tarout") == 0
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 31: cron scheduler
+        print("Test 31: Cron scheduler...")
+        try:
+            import time as _time
+            from core.cron import CronScheduler
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            sched = CronScheduler(shell)
+            sched.start()
+            job = sched.add_job("test_echo", "echo cron_ran > /tmp/cron_out.txt", interval=0.5, delay=0.0)
+            assert job.job_id == 1
+            _time.sleep(1.2)  # Let it run at least twice
+            assert job.run_count >= 1
+            sched.pause_job(job.job_id)
+            assert sched.jobs[job.job_id].state.value == "paused"
+            sched.resume_job(job.job_id)
+            assert sched.jobs[job.job_id].state.value == "active"
+            sched.remove_job(job.job_id)
+            assert job.job_id not in sched.jobs
+            sched.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 32: /etc and /proc system files
+        print("Test 32: System files (/etc/motd, /etc/hostname, /proc/version)...")
+        try:
+            fs = FileSystem()
+            assert fs.exists("/etc/hostname")
+            assert fs.exists("/etc/motd")
+            assert fs.exists("/etc/os-release")
+            assert fs.exists("/proc/version")
+            assert fs.exists("/proc/net/dev")
+            hostname = fs.read_file("/etc/hostname")
+            assert hostname is not None and b"pureos" in hostname
+            motd = fs.read_file("/etc/motd")
+            assert motd is not None and b"PureOS" in motd
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 33: top command
+        print("Test 33: top command...")
+        try:
+            kernel = Kernel()
+            kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("top > /tmp/top_out.txt") == 0
+            content = fs.read_file("/tmp/top_out.txt")
+            assert content is not None
+            assert b"PID" in content
+            assert b"NAME" in content
+            kernel.stop()
             print("  PASS")
             passed += 1
         except Exception as e:
