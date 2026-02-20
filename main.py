@@ -1275,6 +1275,297 @@ class PureOS:
             failed += 1
 
         print(f"\n{'='*50}")
+        # Test 47: /etc/passwd and /etc/group populated by UserManager
+        print("Test 47: /etc/passwd and /etc/group system files...")
+        try:
+            fs = FileSystem()
+            um = UserManager(fs)
+            passwd = fs.read_file("/etc/passwd")
+            assert passwd is not None
+            assert b"root" in passwd
+            assert b"alice" in passwd
+            group = fs.read_file("/etc/group")
+            assert group is not None
+            assert b"root" in group
+            assert b"sudo" in group
+            # Create a new user and confirm files are updated
+            um.create_user("bob", "secret")
+            passwd2 = fs.read_file("/etc/passwd")
+            assert b"bob" in passwd2
+            group2 = fs.read_file("/etc/group")
+            assert b"bob" in group2
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 48: Signal system (SIGTERM, SIGKILL, SIGSTOP, SIGCONT)
+        print("Test 48: Kernel signal system...")
+        try:
+            import time as _time
+            from core.kernel import Signal
+            kernel = Kernel()
+            kernel.start()
+
+            def long_task():
+                _time.sleep(10)
+
+            pid = kernel.create_process("longtask", long_task)
+            _time.sleep(0.05)
+            # SIGSTOP suspends the process
+            assert kernel.send_signal(pid, Signal.SIGSTOP)
+            proc = kernel.get_process(pid)
+            assert proc is not None and proc.state.value == "stopped"
+            # SIGCONT resumes it
+            assert kernel.send_signal(pid, Signal.SIGCONT)
+            proc = kernel.get_process(pid)
+            assert proc is not None and proc.state.value in ("ready", "running")
+            # SIGKILL terminates
+            assert kernel.send_signal(pid, Signal.SIGKILL)
+            proc = kernel.get_process(pid)
+            assert proc is not None and proc.state.value == "terminated"
+            # Signal to non-existent PID returns False
+            assert kernel.send_signal(99999, Signal.SIGTERM) == False
+            # Custom signal handler
+            received = []
+            pid2 = kernel.create_process("handler_task", long_task)
+            kernel.register_signal_handler(pid2, Signal.SIGUSR1,
+                                           lambda sig: received.append(sig))
+            kernel.send_signal(pid2, Signal.SIGUSR1)
+            assert Signal.SIGUSR1.value in received
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 49: groups command
+        print("Test 49: groups command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            um = UserManager(fs)
+            shell = Shell(kernel, fs, user_manager=um)
+            assert "groups" in shell.commands
+            assert shell.execute("groups root > /tmp/groups_out.txt") == 0
+            content = fs.read_file("/tmp/groups_out.txt")
+            assert content is not None and b"root" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 50: pstree command
+        print("Test 50: pstree command...")
+        try:
+            kernel = Kernel()
+            kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "pstree" in shell.commands
+            assert shell.execute("pstree > /tmp/pstree_out.txt") == 0
+            assert shell.execute("pstree -p > /tmp/pstree_p.txt") == 0
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 51: vmstat command
+        print("Test 51: vmstat command...")
+        try:
+            kernel = Kernel()
+            kernel.start()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "vmstat" in shell.commands
+            assert shell.execute("vmstat > /tmp/vmstat_out.txt") == 0
+            content = fs.read_file("/tmp/vmstat_out.txt")
+            assert content is not None
+            assert b"memory" in content.lower() or b"free" in content.lower()
+            kernel.stop()
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 52: zip / unzip commands
+        print("Test 52: zip/unzip commands...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo zipme > /tmp/zip_src.txt") == 0
+            assert shell.execute("zip /tmp/test.zip /tmp/zip_src.txt") == 0
+            assert fs.exists("/tmp/test.zip")
+            assert shell.execute("mkdir -p /tmp/zip_dest") == 0
+            assert shell.execute("unzip -d /tmp/zip_dest /tmp/test.zip") == 0
+            content = fs.read_file("/tmp/zip_dest/zip_src.txt")
+            assert content is not None and b"zipme" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 53: dd command
+        print("Test 53: dd command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo 'hello dd world' > /tmp/dd_in.txt") == 0
+            assert shell.execute("dd if=/tmp/dd_in.txt of=/tmp/dd_out.txt") == 0
+            content = fs.read_file("/tmp/dd_out.txt")
+            assert content is not None and b"hello" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 54: nl command (number lines)
+        print("Test 54: nl command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo alpha > /tmp/nl_in.txt") == 0
+            assert shell.execute("echo beta >> /tmp/nl_in.txt") == 0
+            assert shell.execute("nl /tmp/nl_in.txt > /tmp/nl_out.txt") == 0
+            content = fs.read_file("/tmp/nl_out.txt")
+            assert content is not None
+            assert b"1" in content and b"alpha" in content
+            assert b"2" in content and b"beta" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 55: od / xxd hex dump commands
+        print("Test 55: od/xxd hex dump commands...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo hello > /tmp/od_in.txt") == 0
+            assert shell.execute("od -x /tmp/od_in.txt > /tmp/od_out.txt") == 0
+            od_content = fs.read_file("/tmp/od_out.txt")
+            assert od_content is not None and len(od_content) > 0
+            assert shell.execute("xxd /tmp/od_in.txt > /tmp/xxd_out.txt") == 0
+            xxd_content = fs.read_file("/tmp/xxd_out.txt")
+            assert xxd_content is not None
+            assert b"68" in xxd_content  # 'h' = 0x68
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 56: column command
+        print("Test 56: column command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo 'name:age:city' > /tmp/col_in.txt") == 0
+            assert shell.execute("echo 'alice:30:NYC' >> /tmp/col_in.txt") == 0
+            assert shell.execute("echo 'bob:25:LA' >> /tmp/col_in.txt") == 0
+            assert shell.execute("column -t -s : /tmp/col_in.txt > /tmp/col_out.txt") == 0
+            content = fs.read_file("/tmp/col_out.txt")
+            assert content is not None
+            assert b"alice" in content and b"30" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 57: mount / umount commands
+        print("Test 57: mount/umount commands...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "mount" in shell.commands
+            assert "umount" in shell.commands
+            # List mounts (no args)
+            assert shell.execute("mount > /tmp/mount_out.txt") == 0
+            content = fs.read_file("/tmp/mount_out.txt")
+            assert content is not None and b"/" in content
+            # Mount a virtual device
+            assert shell.execute("mount /dev/sdb1 /mnt") == 0
+            # Unmount
+            assert shell.execute("umount /mnt") == 0
+            # Double unmount fails
+            assert shell.execute("umount /mnt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 58: nohup command
+        print("Test 58: nohup command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "nohup" in shell.commands
+            assert shell.execute("nohup echo nohup_test") == 0
+            nohup_path = shell.fs._normalize_path(
+                shell.environment.get("HOME", "/root") + "/nohup.out")
+            content = fs.read_file(nohup_path)
+            assert content is not None and b"nohup_test" in content
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 59: install command
+        print("Test 59: install command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "install" in shell.commands
+            assert shell.execute("echo bindata > /tmp/install_src.sh") == 0
+            assert shell.execute("install -m 755 /tmp/install_src.sh /usr/local/bin/") == 0
+            content = fs.read_file("/usr/local/bin/install_src.sh")
+            assert content is not None and b"bindata" in content
+            inode = fs.get_inode("/usr/local/bin/install_src.sh")
+            assert inode is not None and inode.permissions == "rwxr-xr-x"
+            # install -d creates directories
+            assert shell.execute("install -d /tmp/newdir/sub") == 0
+            assert fs.is_directory("/tmp/newdir/sub")
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        # Test 60: strace command (simulated)
+        print("Test 60: strace command (simulated)...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert "strace" in shell.commands
+            assert shell.execute("strace echo hello > /tmp/strace_out.txt") == 0
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
+        print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
         return 0 if failed == 0 else 1
