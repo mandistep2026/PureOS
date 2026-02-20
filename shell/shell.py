@@ -4998,7 +4998,7 @@ class MktempCommand(ShellCommand):
 
         if is_dir:
             rc = shell.fs.mkdir(path)
-            if rc:
+            if not rc:
                 print(f"mktemp: cannot create dir '{path}'")
                 return 1
         else:
@@ -5800,6 +5800,11 @@ class DdCommand(ShellCommand):
         bs   = int(params.get('bs', '512'))
         count = params.get('count')
         skip  = int(params.get('skip', '0'))
+
+        if not args:
+            print("dd: missing operand", file=sys.stderr)
+            print("Usage: dd [if=FILE] [of=FILE] [bs=N] [count=N]", file=sys.stderr)
+            return 1
 
         if inf:
             data = shell.fs.read_file(inf)
