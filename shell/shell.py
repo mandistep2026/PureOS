@@ -355,6 +355,7 @@ class Shell:
                     if end_brace != -1:
                         name = line[i + 2:end_brace]
                         # Handle ${var:-default}, ${var:=default}, ${#var}
+                        # IMPORTANT: ${#var} must be checked BEFORE plain $#
                         if name.startswith('#'):
                             var_name = name[1:]
                             val = self.environment.get(var_name, '')
