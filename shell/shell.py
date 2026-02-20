@@ -870,11 +870,11 @@ class CatCommand(ShellCommand):
     
     def execute(self, args: List[str], shell) -> int:
         if not args:
-            # Read from stdin
+            # Read from stdin (works with both real stdin and StringIO)
             try:
-                while True:
-                    line = input()
-                    print(line)
+                data = sys.stdin.read()
+                if data:
+                    print(data, end='' if data.endswith('\n') else '\n')
             except EOFError:
                 pass
             return 0
