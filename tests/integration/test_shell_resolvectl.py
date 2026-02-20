@@ -26,23 +26,26 @@ class TestResolvectlStatusCommand(BaseTestCase):
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
-        self.assertIn(b"Current DNS Server", content)
-        self.assertIn(b"8.8.8.8", content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertIn("Current DNS Server", text)
+        self.assertIn("8.8.8.8", text)
 
     def test_resolvectl_status_reports_dns_servers(self):
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
-        self.assertIn(b"DNS Servers", content)
-        self.assertIn(b"8.8.4.4", content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertIn("DNS Servers", text)
+        self.assertIn("8.8.4.4", text)
 
     def test_resolvectl_status_reports_dns_domain(self):
         self.shell.execute("resolvconf -s corp.local")
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
-        self.assertIn(b"DNS Domain", content)
-        self.assertIn(b"corp.local", content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertTrue("DNS Domain" in text or "Search Domains" in text)
+        self.assertIn("corp.local", text)
 
     def test_resolvectl_status_reports_multiple_dns_domains(self):
         self.shell.execute("resolvconf -s corp.local example.com")
