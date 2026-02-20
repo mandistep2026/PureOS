@@ -427,7 +427,8 @@ class TestDnsConfigWithResolverConfig(BaseTestCase):
         """Writing resolv.conf content to /etc/resolv.conf reflects custom NS."""
         cfg = ResolverConfig(nameservers=["1.1.1.1"], search=["home.lan"])
         resolv_text = cfg.to_resolv_conf().encode()
-        self.shell.filesystem.create_file("/etc/resolv.conf", resolv_text)
+        # /etc/resolv.conf already exists at boot — use write_file to overwrite.
+        self.shell.filesystem.write_file("/etc/resolv.conf", resolv_text)
         stored = self.shell.filesystem.read_file("/etc/resolv.conf")
         self.assertIn(b"nameserver 1.1.1.1", stored)
         self.assertIn(b"search home.lan", stored)
@@ -440,7 +441,8 @@ class TestDnsConfigWithResolverConfig(BaseTestCase):
         original = ResolverConfig(nameservers=["9.9.9.9", "149.112.112.112"],
                                   search=["office.lan"])
         content = original.to_resolv_conf().encode()
-        self.shell.filesystem.create_file("/etc/resolv.conf", content)
+        # /etc/resolv.conf already exists at boot — use write_file to overwrite.
+        self.shell.filesystem.write_file("/etc/resolv.conf", content)
         raw = self.shell.filesystem.read_file("/etc/resolv.conf")
         restored = ResolverConfig.from_resolv_conf(raw.decode())
         self.assertEqual(restored.nameservers, original.nameservers)
