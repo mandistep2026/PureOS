@@ -509,7 +509,8 @@ class ResolvectlCommand(ShellCommand):
 
         for iface in self.nm.list_interfaces():
             shell.print("")
-            shell.print(f"Link {iface.name} ({iface.ip_address})")
+            shell.print(f"Link {iface.name} ({iface.state.value})")
+            shell.print(f"  Addresses: {iface.get_cidr()}")
             if nameservers:
                 shell.print(f"  DNS Servers: {' '.join(nameservers)}")
             if search:
