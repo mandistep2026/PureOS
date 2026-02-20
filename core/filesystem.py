@@ -284,6 +284,8 @@ class FileSystem:
         
         content = inode.content
         if isinstance(content, bytes):
+            self.total_reads += 1
+            self.read_bytes_total += len(content)
             return content
         return None
     
