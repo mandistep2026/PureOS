@@ -115,6 +115,7 @@ class Shell:
         self.register_command(TailCommand())
         self.register_command(WcCommand())
         self.register_command(SortCommand())
+        self.register_command(UniqCommand())
         self.register_command(FindCommand())
         
         # System info
@@ -1890,6 +1891,71 @@ class SortCommand(ShellCommand):
 
         for line in sorted_lines:
             print(line)
+
+        return 0
+
+
+class UniqCommand(ShellCommand):
+    """Report or omit repeated lines."""
+
+    def __init__(self):
+        super().__init__("uniq", "Filter adjacent matching lines from files")
+
+    def execute(self, args: List[str], shell) -> int:
+        count = False
+        repeated_only = False
+        unique_only = False
+        filenames: List[str] = []
+
+        for arg in args:
+            if arg == '-c':
+                count = True
+            elif arg == '-d':
+                repeated_only = True
+            elif arg == '-u':
+                unique_only = True
+            elif arg.startswith('-'):
+                print(f"uniq: invalid option -- '{arg}'")
+                return 1
+            else:
+                filenames.append(arg)
+
+        if repeated_only and unique_only:
+            print("uniq: options '-d' and '-u' are mutually exclusive")
+            return 1
+
+        if len(filenames) > 1:
+            print("uniq: extra operand")
+            return 1
+
+        if not filenames:
+            print("uniq: missing file operand")
+            return 1
+
+        content = shell.fs.read_file(filenames[0])
+        if content is None:
+            print(f"uniq: {filenames[0]}: No such file or directory")
+            return 1
+
+        lines = content.decode('utf-8', errors='replace').splitlines()
+        groups: List[Tuple[str, int]] = []
+
+        for line in lines:
+            if groups and groups[-1][0] == line:
+                groups[-1] = (line, groups[-1][1] + 1)
+            else:
+                groups.append((line, 1))
+
+        for line, line_count in groups:
+            if repeated_only and line_count < 2:
+                continue
+            if unique_only and line_count != 1:
+                continue
+
+            if count:
+                print(f"{line_count} {line}")
+            else:
+                print(line)
 
         return 0
 

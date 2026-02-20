@@ -33,6 +33,7 @@ An operating system written entirely in Python using only the standard library. 
 - `mv` - Move/rename files
 - `find` - Search for files and directories (supports `-name`, `-type`, `-mindepth`, and `-maxdepth`)
 - `sort` - Sort lines in text files (supports `-r` reverse and `-u` unique)
+- `uniq` - Filter adjacent duplicate lines (supports `-c` counts, `-d` duplicates only, `-u` unique only)
 - `chmod` - Change file permissions (symbolic mode like `rwxr-xr-x` or octal mode like `755`)
 - `chown` - Change file owner/group (format: `owner[:group]`)
 - `stat` - Display file or directory metadata (type, size, owner, permissions, timestamps)
