@@ -5624,10 +5624,14 @@ class InstallCommand(ShellCommand):
                 print(f"install: cannot stat '{src}': No such file or directory", file=sys.stderr)
                 return 1
             import posixpath as _pp
-            if shell.fs.is_directory(dest):
-                target = shell.fs._normalize_path(dest + "/" + _pp.basename(src))
+            # Treat dest as a directory if it ends with '/' or is an existing dir
+            dest_norm = shell.fs._normalize_path(dest)
+            if dest.endswith('/') or shell.fs.is_directory(dest_norm):
+                if not shell.fs.is_directory(dest_norm):
+                    shell.fs.mkdir(dest_norm, parents=True)
+                target = shell.fs._normalize_path(dest_norm + "/" + _pp.basename(src))
             else:
-                target = shell.fs._normalize_path(dest)
+                target = dest_norm
             shell.fs.write_file(target, data)
             # Apply mode
             try:
