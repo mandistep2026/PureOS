@@ -3,7 +3,7 @@ name: orchestrator
 description: "Team coordinator & workflow manager \u2014 decomposes tasks, delegates\
   \ to specialized subagents, tracks progress, synthesizes results"
 tools:
-- invoke_subagent
+- invoke_subagent/s
 - open_files
 - expand_code_chunks
 - grep
