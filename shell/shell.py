@@ -6003,25 +6003,37 @@ class NohupCommand(ShellCommand):
             print("Usage: nohup command [args ...]")
             return 1
         cmd_line = ' '.join(args)
-        # Redirect stdout to nohup.out
         nohup_path = shell.fs._normalize_path(
             shell.environment.get("HOME", "/root") + "/nohup.out")
-        old_stdout = sys.stdout
-        captured = StringIO()
-        sys.stdout = captured
-        rc = 0
-        try:
-            rc = shell.execute(cmd_line, save_to_history=False)
-        except Exception:
-            rc = 1
-        finally:
-            sys.stdout = old_stdout
-        output = captured.getvalue()
-        # Append to nohup.out
-        existing = shell.fs.read_file(nohup_path) or b""
-        shell.fs.write_file(nohup_path, existing + output.encode())
-        print(f"nohup: appending output to '{nohup_path}'")
-        return rc
+        # Check if stdout is redirected (not a real terminal / not the original stdout)
+        current_stdout = sys.stdout
+        is_redirected = isinstance(current_stdout, StringIO)
+        if is_redirected:
+            # Stdout is already redirected by the shell — run the command directly
+            # so its output goes to the redirected destination
+            rc = 0
+            try:
+                rc = shell.execute(cmd_line, save_to_history=False)
+            except Exception:
+                rc = 1
+            return rc
+        else:
+            # Stdout is a terminal — capture output and write to nohup.out
+            old_stdout = sys.stdout
+            captured = StringIO()
+            sys.stdout = captured
+            rc = 0
+            try:
+                rc = shell.execute(cmd_line, save_to_history=False)
+            except Exception:
+                rc = 1
+            finally:
+                sys.stdout = old_stdout
+            output = captured.getvalue()
+            existing = shell.fs.read_file(nohup_path) or b""
+            shell.fs.write_file(nohup_path, existing + output.encode())
+            print(f"nohup: appending output to '{nohup_path}'")
+            return rc
 
 
 class MountCommand(ShellCommand):
