@@ -2702,6 +2702,10 @@ class CutCommand(ShellCommand):
         field_spec = None
         filenames: List[str] = []
 
+        if not args:
+            print("cut: you must specify a list of fields with -f")
+            return 1
+
         i = 0
         while i < len(args):
             arg = args[i]
@@ -2721,6 +2725,14 @@ class CutCommand(ShellCommand):
                     return 1
                 field_spec = args[i + 1]
                 i += 2
+            elif arg.startswith('-f') and len(arg) > 2:
+                # Handle combined -f1, -f1-3, -f1,3 etc.
+                field_spec = arg[2:]
+                i += 1
+            elif arg.startswith('-d') and len(arg) > 2:
+                # Handle combined -d: etc.
+                delimiter = arg[2]
+                i += 1
             elif arg.startswith('-'):
                 print(f"cut: invalid option -- '{arg}'")
                 return 1
@@ -2732,22 +2744,12 @@ class CutCommand(ShellCommand):
             print("cut: you must specify a list of fields with -f")
             return 1
 
-        if not filenames:
-            print("cut: missing file operand")
-            return 1
-
         fields = self._parse_field_spec(field_spec)
         if not fields:
             print(f"cut: invalid field list '{field_spec}'")
             return 1
 
-        for filename in filenames:
-            content = shell.fs.read_file(filename)
-            if content is None:
-                print(f"cut: {filename}: No such file or directory")
-                return 1
-
-            text = content.decode('utf-8', errors='replace')
+        def _process_lines(text: str) -> None:
             for line in text.splitlines():
                 parts = line.split(delimiter)
                 selected = []
@@ -2756,6 +2758,21 @@ class CutCommand(ShellCommand):
                     if 0 <= index < len(parts):
                         selected.append(parts[index])
                 print(delimiter.join(selected))
+
+        if not filenames:
+            # Read from stdin
+            text = sys.stdin.read()
+            _process_lines(text)
+            return 0
+
+        for filename in filenames:
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"cut: {filename}: No such file or directory")
+                return 1
+
+            text = content.decode('utf-8', errors='replace')
+            _process_lines(text)
 
         return 0
 
