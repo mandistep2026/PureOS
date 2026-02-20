@@ -96,6 +96,11 @@ class Shell:
         except:
             pass
         self._register_commands()
+
+    @property
+    def filesystem(self):
+        """Backward compatibility property for accessing filesystem."""
+        return self.fs
     
     def _register_commands(self) -> None:
         """Register all built-in commands."""
