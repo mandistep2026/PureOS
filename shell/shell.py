@@ -128,6 +128,7 @@ class Shell:
         self.register_command(TailCommand())
         self.register_command(WcCommand())
         self.register_command(CutCommand())
+        self.register_command(PasteCommand())
         self.register_command(SortCommand())
         self.register_command(UniqCommand())
         self.register_command(FindCommand())
@@ -2860,6 +2861,73 @@ class CutCommand(ShellCommand):
 
             text = content.decode('utf-8', errors='replace')
             _process_lines(text)
+
+        return 0
+
+
+class PasteCommand(ShellCommand):
+    """Merge lines of files side by side."""
+
+    def __init__(self):
+        super().__init__("paste", "Merge lines of files")
+
+    def execute(self, args: List[str], shell) -> int:
+        delimiter = '\t'
+        filenames: List[str] = []
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == '-d':
+                if i + 1 >= len(args):
+                    print("paste: option requires an argument -- 'd'")
+                    return 1
+                delim_text = args[i + 1]
+                if not delim_text:
+                    print("paste: delimiter cannot be empty")
+                    return 1
+                delimiter = delim_text[0]
+                i += 2
+            elif arg.startswith('-d') and len(arg) > 2:
+                delimiter = arg[2]
+                i += 1
+            elif arg.startswith('-'):
+                print(f"paste: invalid option -- '{arg}'")
+                return 1
+            else:
+                filenames.append(arg)
+                i += 1
+
+        if not filenames:
+            print("paste: missing file operand")
+            print("usage: paste [-d DELIM] FILE...")
+            return 1
+
+        sources: List[List[str]] = []
+        stdin_consumed = False
+
+        for filename in filenames:
+            if filename == '-':
+                if stdin_consumed:
+                    lines = []
+                else:
+                    lines = sys.stdin.read().splitlines()
+                    stdin_consumed = True
+                sources.append(lines)
+                continue
+
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"paste: {filename}: No such file or directory")
+                return 1
+            sources.append(content.decode('utf-8', errors='replace').splitlines())
+
+        max_lines = max(len(lines) for lines in sources) if sources else 0
+        for idx in range(max_lines):
+            row = []
+            for lines in sources:
+                row.append(lines[idx] if idx < len(lines) else '')
+            print(delimiter.join(row))
 
         return 0
 
