@@ -600,6 +600,11 @@ class Shell:
             self.history.append(stripped)
             self.history_position = len(self.history)
 
+        # Handle boolean chains (&& / ||) before pipes
+        bool_segments, bool_ops = self._split_boolean_chains(stripped)
+        if len(bool_segments) > 1:
+            return self._execute_boolean_chain(bool_segments, bool_ops, background)
+
         # Handle pipe chains: split on unquoted '|'
         pipe_segments = self._split_pipes(stripped)
         if len(pipe_segments) > 1:
