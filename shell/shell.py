@@ -113,6 +113,7 @@ class Shell:
         self.register_command(HeadCommand())
         self.register_command(TailCommand())
         self.register_command(WcCommand())
+        self.register_command(SortCommand())
         self.register_command(FindCommand())
         
         # System info
@@ -1696,6 +1697,58 @@ class WcCommand(ShellCommand):
                 output_parts.append(str(totals['bytes']))
             output_parts.append('total')
             print(' '.join(output_parts))
+
+        return 0
+
+
+class SortCommand(ShellCommand):
+    """Sort lines of text files."""
+
+    def __init__(self):
+        super().__init__("sort", "Sort lines of text files")
+
+    def execute(self, args: List[str], shell) -> int:
+        reverse = False
+        unique = False
+        filenames: List[str] = []
+
+        for arg in args:
+            if arg == '-r':
+                reverse = True
+            elif arg == '-u':
+                unique = True
+            elif arg.startswith('-'):
+                print(f"sort: invalid option -- '{arg}'")
+                return 1
+            else:
+                filenames.append(arg)
+
+        if not filenames:
+            print("sort: missing file operand")
+            return 1
+
+        all_lines: List[str] = []
+
+        for filename in filenames:
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"sort: cannot read '{filename}': No such file or directory")
+                return 1
+            lines = content.decode('utf-8', errors='replace').splitlines()
+            all_lines.extend(lines)
+
+        sorted_lines = sorted(all_lines, reverse=reverse)
+        if unique:
+            deduped: List[str] = []
+            prev = None
+            for line in sorted_lines:
+                if line != prev:
+                    deduped.append(line)
+                    prev = line
+            sorted_lines = deduped
+
+        for line in sorted_lines:
+            print(line)
 
         return 0
 

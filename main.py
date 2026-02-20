@@ -577,6 +577,28 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+        # Test 18: Sort command
+        print("Test 18: Sort command...")
+        try:
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+            assert shell.execute("echo banana > /tmp/sort.txt") == 0
+            assert shell.execute("echo apple >> /tmp/sort.txt") == 0
+            assert shell.execute("echo banana >> /tmp/sort.txt") == 0
+            assert shell.execute("sort /tmp/sort.txt > /tmp/sort_out.txt") == 0
+            assert fs.read_file("/tmp/sort_out.txt") == b"apple\nbanana\nbanana\n"
+            assert shell.execute("sort -u /tmp/sort.txt > /tmp/sort_unique.txt") == 0
+            assert fs.read_file("/tmp/sort_unique.txt") == b"apple\nbanana\n"
+            assert shell.execute("sort -r /tmp/sort.txt > /tmp/sort_reverse.txt") == 0
+            assert fs.read_file("/tmp/sort_reverse.txt") == b"banana\nbanana\napple\n"
+            assert shell.execute("sort -z /tmp/sort.txt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
@@ -616,6 +638,7 @@ def show_help():
     print("  unset     Remove environment variable")
     print("  which     Locate a command")
     print("  type      Describe command type")
+    print("  sort      Sort lines in text files")
     print("  reboot    Reboot system")
     print("  shutdown  Power off")
     print("  exit      Exit shell")
