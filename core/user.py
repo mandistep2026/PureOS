@@ -76,6 +76,16 @@ class UserManager:
         # Initialize with root user
         self._initialize_system()
     
+    def _refresh_etc_files(self) -> None:
+        """Write current user/group data to /etc/passwd and /etc/group."""
+        try:
+            passwd_content = self.export_passwd() + "\n"
+            self.fs.write_file("/etc/passwd", passwd_content.encode())
+            group_content = self.export_group() + "\n"
+            self.fs.write_file("/etc/group", group_content.encode())
+        except Exception:
+            pass
+
     def _initialize_system(self) -> None:
         """Initialize system with default users and groups."""
         # Create root user (UID 0)
@@ -96,9 +106,14 @@ class UserManager:
         
         # Create standard groups
         self.groups["users"] = Group(name="users", gid=100)
+        self.groups["sudo"]  = Group(name="sudo",  gid=27,  members=["root"])
+        self.groups["disk"]  = Group(name="disk",  gid=6,   members=["root"])
+        self.groups["wheel"] = Group(name="wheel", gid=10,  members=["root"])
         
         # Create default regular user 'alice'
         self._create_default_user("alice", "password123", "/home/alice")
+        # Refresh system files to reflect all users/groups
+        self._refresh_etc_files()
     
     def _create_default_user(self, username: str, password: str, home_dir: str) -> None:
         """Create a default user with home directory."""
