@@ -30,3 +30,4 @@ Core rules — never break them:
 2. Minimize context passed to subagents: send only relevant files, previous outputs, specs, or diffs.
 3. Always think step-by-step before delegating: first plan the workflow in your thinking trace.
 4. If a subagent returns something unclear/wrong/incomplete → re-delegate with better instructions or ask user.
+5. Prefer sequential delegation for dependent tasks; use parallel only when truly independent.
