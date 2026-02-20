@@ -1329,3 +1329,589 @@ Return metadata about the saved state without loading it: `version`, `files`, `d
 
 Delete the saved state file from the host disk.
 
+
+---
+
+## Shell Module APIs
+
+### shell.shell — Shell
+
+```python
+class shell.shell.Shell
+```
+
+The main command interpreter. Parses and executes command lines with full support for pipelines, I/O redirection, background jobs, variable expansion, aliases, here-documents, and boolean chains (`&&`/`||`).
+
+**Constructor**
+
+```python
+Shell(kernel: Kernel, filesystem: FileSystem,
+      authenticator: Authenticator = None,
+      user_manager: UserManager = None)
+```
+
+**Properties**
+
+| Property | Type | Description |
+|---|---|---|
+| `kernel` | `Kernel` | Attached kernel instance. |
+| `fs` | `FileSystem` | Virtual filesystem (also accessible as `.filesystem`). |
+| `auth` | `Authenticator \| None` | Authenticator instance. |
+| `um` | `UserManager \| None` | User manager instance. |
+| `commands` | `Dict[str, ShellCommand]` | Registered command objects. |
+| `environment` | `Dict[str, str]` | Shell environment variables. |
+| `aliases` | `Dict[str, str]` | Alias expansions (defaults: `ll`, `la`, `l`). |
+| `history` | `List[str]` | Command history list. |
+| `last_exit_code` | `int` | Exit code of the last executed command. |
+| `package_manager` | `PackageManager \| None` | Attached package manager. |
+| `network_manager` | `NetworkManager \| None` | Attached network manager. |
+
+**Methods**
+
+---
+
+#### `Shell.execute(line, save_to_history=True) -> int`
+
+Execute a command line string. Handles the full pipeline:
+
+1. Here-document preprocessing (`<<EOF`)
+2. Background execution (`&`)
+3. History expansion (`!!`, `!N`)
+4. Boolean chains (`&&`, `||`)
+5. Pipe chains (`|`)
+6. Single command with redirections (`<`, `>`, `>>`, `2>`, `2>>`, `&>`, `&>>`)
+
+Returns the exit code of the last executed command.
+
+```python
+rc = shell.execute("echo hello | grep hello > /tmp/out.txt")
+rc = shell.execute("ls -la && cat /etc/hostname")
+rc = shell.execute("sleep 10 &")
+```
+
+---
+
+#### `Shell.parse_input(line) -> tuple[str, List[str]]`
+
+Parse a command line into `(command_name, args)`. Performs alias expansion, variable expansion, and wildcard glob expansion. Uses `shlex` for POSIX-correct tokenization.
+
+```python
+cmd, args = shell.parse_input("ls -la /home")
+# cmd="ls", args=["-la", "/home"]
+```
+
+---
+
+#### `Shell.register_command(command) -> None`
+
+Register a `ShellCommand` instance, making it available by name.
+
+```python
+shell.register_command(MyCustomCommand())
+```
+
+---
+
+#### `Shell._expand_environment_variables(line) -> str`
+
+Expand shell variables in a line with full quote-awareness. Supports:
+- `$VAR`, `${VAR}` — simple expansion
+- `${VAR:-default}` — default value
+- `${VAR:=default}` — assign default
+- `${VAR:?msg}` — error if unset
+- `${VAR:+alt}` — alternate value
+- `${#VAR}` — string length
+- `$?` — last exit code
+- `$(cmd)` — command substitution
+- `$(( expr ))` — arithmetic expansion
+
+---
+
+#### `Shell._expand_wildcard(pattern) -> List[str]`
+
+Expand a glob pattern (`*`, `?`, `[...]`) against the current filesystem. Returns sorted list of matching absolute paths, or empty list on no match.
+
+---
+
+### shell.shell — ShellCommand
+
+```python
+class shell.shell.ShellCommand
+```
+
+Base class for all shell commands.
+
+**Constructor**
+
+```python
+ShellCommand(name: str, description: str = "")
+```
+
+**Methods**
+
+---
+
+#### `ShellCommand.execute(args, shell) -> int`
+
+Execute the command. Must be overridden by subclasses.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `args` | `List[str]` | Parsed argument list (excluding command name). |
+| `shell` | `Shell` | The shell instance (provides access to `fs`, `kernel`, `environment`, etc.). |
+
+**Returns** `int` — exit code. `0` = success, non-zero = error.
+
+```python
+class HelloCommand(ShellCommand):
+    def __init__(self):
+        super().__init__("hello", "Print a greeting")
+
+    def execute(self, args, shell):
+        name = args[0] if args else "world"
+        print(f"Hello, {name}!")
+        return 0
+
+shell.register_command(HelloCommand())
+```
+
+---
+
+#### `ShellCommand.get_help() -> str`
+
+Return a one-line help string: `"name: description"`.
+
+---
+
+## Command Reference
+
+All 70+ built-in commands implement `execute(args, shell) -> int`. They are organized below by category. Each command is registered by name and invocable from `shell.execute()`.
+
+### Filesystem Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `ls` | `LsCommand` | List directory contents. Flags: `-l`, `-a`, `-h`, `-F`, `-r`, `-t`, `-S`, `-1`. |
+| `cd` | `CdCommand` | Change directory. `cd -` returns to previous directory. |
+| `pwd` | `PwdCommand` | Print working directory. |
+| `cat` | `CatCommand` | Concatenate and print files. Flags: `-n` (line numbers), `-A` (show non-printing). |
+| `mkdir` | `MkdirCommand` | Create directories. Flags: `-p` (parents). |
+| `rmdir` | `RmdirCommand` | Remove empty directories. |
+| `rm` | `RmCommand` | Remove files or directories. Flags: `-r`/`-R` (recursive), `-f` (force), `-i` (interactive). |
+| `touch` | `TouchCommand` | Create empty files or update timestamps. |
+| `cp` | `CpCommand` | Copy files or directories. Flags: `-r`/`-R`, `-f`, `-i`. |
+| `mv` | `MvCommand` | Move or rename files. |
+| `chmod` | `ChmodCommand` | Change file permissions (octal or symbolic). |
+| `chown` | `ChownCommand` | Change file owner/group. |
+| `stat` | `StatCommand` | Display file metadata. |
+| `ln` | `LnCommand` | Create hard or symbolic links. Flags: `-s` (symlink). |
+| `find` | `FindCommand` | Search for files. Options: `-name`, `-type`, `-size`, `-newer`, `-exec`. |
+| `diff` | `DiffCommand` | Compare two files line by line. |
+| `dd` | `DdCommand` | Copy and convert files (`if=`, `of=`, `bs=`, `count=`). |
+| `install` | `InstallCommand` | Copy files and set attributes. |
+| `mount` | `MountCommand` | Display or simulate mount information. |
+| `umount` | `UmountCommand` | Simulate unmounting a filesystem. |
+
+### Text Processing Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `grep` | `GrepCommand` | Search file content with regex. Flags: `-i`, `-v`, `-n`, `-r`, `-c`, `-l`, `-E`. |
+| `head` | `HeadCommand` | Output first N lines (`-n`). |
+| `tail` | `TailCommand` | Output last N lines (`-n`). Follow mode: `-f`. |
+| `wc` | `WcCommand` | Count lines, words, bytes. Flags: `-l`, `-w`, `-c`. |
+| `cut` | `CutCommand` | Extract columns (`-d` delimiter, `-f` fields). |
+| `sort` | `SortCommand` | Sort lines. Flags: `-r` (reverse), `-n` (numeric), `-k` (key), `-u` (unique). |
+| `uniq` | `UniqCommand` | Remove or count duplicate adjacent lines. Flags: `-c`, `-d`, `-u`. |
+| `sed` | `SedCommand` | Stream editor (`s/pattern/replace/[g]`, `d`, `p`). Flags: `-n`, `-i`. |
+| `awk` | `AwkCommand` | Pattern-action text processing with field splitting. |
+| `tr` | `TrCommand` | Translate or delete characters. Flags: `-d`, `-s`. |
+| `tee` | `TeeCommand` | Read from stdin and write to stdout and file(s). Flags: `-a` (append). |
+| `nano` | `NanoCommand` | Interactive text editor (non-interactive: reads stdin or file). |
+| `strings` | `StringsCommand` | Extract printable strings from files. Flags: `-n` (min length). |
+| `rev` | `RevCommand` | Reverse each line character-by-character. |
+| `nl` | `NlCommand` | Number lines of files. |
+| `od` | `OdCommand` | Dump file contents in octal/hex. Flags: `-c`, `-x`, `-d`. |
+| `xxd` | `XxdCommand` | Hexdump of file contents. |
+| `column` | `ColumnCommand` | Columnate output (`-t` table mode, `-s` separator). |
+| `pr` (via `printf`) | `PrintfCommand` | Format and print data (printf syntax). |
+
+### Search & Utility Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `echo` | `EchoCommand` | Print arguments. Flags: `-n` (no newline), `-e` (escape sequences). |
+| `printf` | `PrintfCommand` | Formatted output (C printf-style). |
+| `xargs` | `XargsCommand` | Build and execute commands from stdin. Flags: `-n`, `-I`. |
+| `expr` | `ExprCommand` | Evaluate arithmetic/string expressions. |
+| `bc` | `BcCommand` | Arbitrary-precision calculator. |
+| `seq` | `SeqCommand` | Print a sequence of numbers. |
+| `yes` | `YesCommand` | Print a string repeatedly until killed. |
+| `cal` | `CalCommand` | Display a calendar. |
+| `date` | `DateCommand` | Display or set the system date/time. |
+| `sleep` | `SleepCommand` | Pause for a specified duration. |
+| `watch` | `WatchCommand` | Execute a command repeatedly (`-n` interval). |
+| `fetch` | `FetchCommand` | Simulate HTTP download (writes to file or stdout). |
+| `readlink` | `ReadlinkCommand` | Print resolved symlink target. Flags: `-f`. |
+| `realpath` | `RealpathCommand` | Print canonicalized absolute path. |
+| `basename` | `BasenameCommand` | Strip directory and suffix from path. |
+| `dirname` | `DirnameCommand` | Strip last path component. |
+| `mktemp` | `MktempCommand` | Create a temporary file or directory. |
+| `which` | `WhichCommand` | Locate a command in the PATH. |
+| `type` | `TypeCommand` | Describe a command (builtin, alias, or not found). |
+| `tar` | `TarCommand` | Archive files (`-c` create, `-x` extract, `-t` list, `-z` gzip, `-f` file). |
+| `zip` | `ZipCommand` | Create ZIP archives. |
+| `unzip` | `UnzipCommand` | Extract ZIP archives. |
+
+### System Information Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `ps` | `PsCommand` | List processes. Flags: `-a`, `-u`, `-x`, `-e`, `-f`. |
+| `kill` | `KillCommand` | Send a signal to a process (`-9`, `-15`, etc.). |
+| `pstree` | `PstreeCommand` | Display process tree. |
+| `top` | `TopCommand` | Dynamic real-time process view. |
+| `htop` | `HtopCommand` | Interactive process viewer with color bars. Options: `-d`, `-p`, `-s`, `-u`. |
+| `lsof` | `LsofCommand` | List open files and IPC objects. |
+| `vmstat` | `VmstatCommand` | Report virtual memory statistics. |
+| `uname` | `UnameCommand` | Print system information. Flags: `-a`, `-r`, `-s`, `-n`. |
+| `uptime` | `UptimeCommand` | Show system uptime and load average. |
+| `free` | `FreeEnhancedCommand` | Memory usage. Flags: `-b`, `-k`, `-m`, `-g`, `-h`, `-t`, `-w`, `-s interval`. |
+| `df` | `DfCommand` | Filesystem disk usage. Flags: `-h`, `-k`. |
+| `du` | `DuCommand` | Directory disk usage. Flags: `-h`, `-s`, `-k`. |
+| `iostat` | `IostatCommand` | I/O and CPU statistics. Flags: `-c`, `-d`, `-x`, `-k`, `-m`. |
+| `mpstat` | `MpstatCommand` | Per-CPU statistics. Flags: `-u`, `-I`, `-A`, `-P`. |
+| `perf` | `PerfCommand` | Performance profiler. Subcommands: `stat`, `top`, `record`, `report`. |
+| `sysdiag` | `SysdiagCommand` | Run system health diagnostics. Flags: `-q`, `-v`, `--fix`, `--category`. |
+| `syshealth` | `SyshealthCommand` | System health dashboard. Flags: `--brief`, `--json`, `--watch`, `--cpu`, `--mem`, `--disk`, `--net`, `--svc`. |
+| `strace` | `StraceCommand` | Trace system calls for a process. |
+
+### User & Session Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `whoami` | `WhoamiCommand` | Print current username. |
+| `who` | `WhoCommand` | List logged-in users. |
+| `id` | `IdCommand` | Print UID, GID, and group membership. |
+| `groups` | `GroupsCommand` | Print group memberships for current or specified user. |
+| `useradd` | `UseraddCommand` | Create a new user account. Options: `-m`, `-d`, `-s`, `-p`. |
+| `userdel` | `UserdelCommand` | Delete a user account. Options: `-r` (remove home). |
+| `passwd` | `PasswdCommand` | Change a user password. |
+| `su` | `SuCommand` | Switch user (`su [-] [username]`). |
+| `login` | `LoginCommand` | Log in as a different user. |
+| `logout` | `LogoutCommand` | Log out of the current session. |
+
+### Environment & Shell Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `env` | `EnvCommand` | Print environment variables. |
+| `export` | `ExportCommand` | Set an environment variable (`KEY=value`). |
+| `unset` | `UnsetCommand` | Remove an environment variable. |
+| `alias` | `AliasCommand` | Define or list aliases. |
+| `unalias` | `UnaliasCommand` | Remove an alias. |
+| `history` | `HistoryCommand` | Show command history. Flags: `-c` (clear). |
+| `source` | `SourceCommand` | Execute a script file in the current shell context. |
+| `bash` | `BashCommand` | Run a script file or inline command (`-c`). |
+| `test` | `TestCommand` | Evaluate conditions (`-f`, `-d`, `-e`, `-z`, `-n`, string/numeric comparisons). |
+| `help` | `HelpCommand` | List all available commands or show help for one. |
+| `clear` | `ClearCommand` | Clear the terminal screen. |
+| `exit` | `ExitCommand` | Exit the shell with an optional exit code. |
+| `jobs` | `JobsCommand` | List background jobs. |
+| `fg` | `FgCommand` | Bring a background job to foreground. |
+| `bg` | `BgCommand` | Resume a stopped job in the background. |
+| `wait` | `WaitCommand` | Wait for a background job to complete. |
+| `nohup` | `NohupCommand` | Run a command immune to hangups. |
+| `save` | `SaveCommand` | Save system state to disk (calls `PersistenceManager.save_state`). |
+| `load` | `LoadCommand` | Load system state from disk. |
+| `reboot` | `RebootCommand` | Simulate system reboot. |
+| `shutdown` | `ShutdownCommand` | Simulate system shutdown. |
+
+### System Management Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `dmesg` | `DmesgCommand` | Print kernel ring buffer. Flags: `-c` (clear), `-l level`, `-n lines`. |
+| `logger` | `LoggerCommand` | Write a message to the system log. Flags: `-p facility.level`, `-t tag`. |
+| `journalctl` | `JournalctlCommand` | Query the system journal. Flags: `-n`, `-u unit`, `-p level`, `-f`. |
+| `systemctl` | `SystemctlCommand` | Manage services. Subcommands: `start`, `stop`, `restart`, `status`, `enable`, `disable`, `list-units`. |
+| `ulimit` | `UlimitCommand` | Get/set resource limits. Flags: `-a` (all), `-c`, `-d`, `-f`, `-n`, `-s`, `-t`, `-u`, `-v`. |
+| `ipcs` | `IpcsCommand` | Show IPC objects. Flags: `-a`, `-q` (queues), `-m` (shared mem), `-s` (semaphores). |
+| `cgctl` | `CgroupCommand` | Manage cgroups. Subcommands: `list`, `create`, `delete`, `move`, `show`. |
+| `cron` | `CronCommand` | Manage scheduled jobs. Subcommands: `add`, `remove`, `list`, `pause`, `resume`. |
+
+### Network Commands
+
+| Command | Class | Description |
+|---|---|---|
+| `ifconfig` | `IfconfigCommand` | Show/configure network interfaces. |
+| `ip` | `IpCommand` | Show/manipulate routing and devices. Subcommands: `addr`, `link`, `route`, `neigh`. |
+| `ping` | `PingCommand` | Send ICMP echo requests. Flags: `-c count`. |
+| `traceroute` | `TracerouteCommand` | Trace route to a host. Flags: `-m max_hops`. |
+| `netstat` | `NetstatCommand` | Show network connections. Flags: `-a`, `-t`, `-u`, `-n`. |
+| `route` | `RouteCommand` | Display the IP routing table. |
+| `arp` | `ArpCommand` | Display the ARP cache. |
+| `hostname` | `HostnameCommand` | Show or set the system hostname. Flags: `-i`, `-s`. |
+| `dig` | `DigCommand` | DNS lookup utility. |
+| `nslookup` | `NslookupCommand` | Query DNS for a domain name. |
+
+### Package Management Command
+
+| Command | Class | Description |
+|---|---|---|
+| `pkg` | `PkgCommand` | Package manager. Subcommands: `install`, `remove`, `list [-a]`, `search`, `info`, `update`, `depends`. |
+
+**Example usage:**
+
+```python
+# Install a package
+shell.execute("pkg install git")
+
+# List installed packages
+shell.execute("pkg list")
+
+# Search the repository
+shell.execute("pkg search network")
+```
+
+---
+
+## Data Classes & Enums
+
+### Process
+
+```python
+@dataclass
+class core.kernel.Process:
+    pid: int
+    name: str
+    state: ProcessState      # NEW, READY, RUNNING, WAITING, STOPPED, TERMINATED
+    priority: int            # 0–10, default 5
+    created_at: float
+    cpu_time: float
+    memory_usage: int        # bytes
+    parent_pid: Optional[int]
+    result: Any              # return value from code()
+    error: Optional[str]
+    pending_signals: List[int]
+    syscall_count: int
+    read_bytes: int
+    write_bytes: int
+```
+
+### Inode
+
+```python
+@dataclass
+class core.filesystem.Inode:
+    name: str
+    type: FileType           # REGULAR, DIRECTORY, SYMLINK
+    parent: Optional[str]
+    content: bytes | Dict    # bytes for files, dict for directories
+    created: float
+    modified: float
+    size: int
+    permissions: str         # e.g. "rw-r--r--"
+    owner: str
+    group: str
+    target: Optional[str]    # symlink target
+```
+
+### Session
+
+```python
+@dataclass
+class core.auth.Session:
+    username: str
+    uid: int
+    gid: int
+    login_time: float
+    is_authenticated: bool
+    terminal: Optional[str]
+
+    def get_prompt(cwd: str = "/") -> str
+    # Returns "username@pureos:/path$ "
+```
+
+### User / Group
+
+```python
+@dataclass
+class core.user.User:
+    username: str
+    uid: int
+    gid: int
+    home_dir: str
+    shell: str
+    password_hash: str       # PBKDF2-HMAC-SHA256, 200,000 iterations
+    salt: str
+    is_active: bool
+    created: float
+    last_login: Optional[float]
+
+@dataclass
+class core.user.Group:
+    name: str
+    gid: int
+    members: List[str]
+```
+
+### LogEntry
+
+```python
+@dataclass
+class core.logging.LogEntry:
+    timestamp: float
+    level: LogLevel
+    facility: LogFacility
+    pid: Optional[int]
+    process_name: str
+    message: str
+    hostname: str            # default "pureos"
+
+    def to_syslog_format() -> str   # <priority>Mon DD HH:MM:SS host proc[pid]: msg
+    def to_readable_format() -> str # YYYY-MM-DD HH:MM:SS LEVEL proc[pid]: msg
+```
+
+### Package
+
+```python
+@dataclass
+class core.package.Package:
+    name: str
+    version: str
+    description: str
+    size: int                # download size in bytes
+    installed_size: int      # on-disk size in bytes
+    dependencies: List[str]
+    status: PackageStatus    # INSTALLED, AVAILABLE, NOT_FOUND
+    author: str
+    category: str            # e.g. "network", "devel", "editors"
+    installed_time: Optional[float]
+```
+
+### CronJob
+
+```python
+@dataclass
+class core.cron.CronJob:
+    job_id: int
+    name: str
+    command: str
+    interval: float          # seconds
+    next_run: float          # epoch timestamp
+    state: CronJobState      # ACTIVE, PAUSED, EXPIRED
+    run_count: int
+    last_run: Optional[float]
+    last_exit_code: Optional[int]
+    max_runs: Optional[int]  # None = unlimited
+```
+
+### Signal
+
+```python
+class core.kernel.Signal(Enum):
+    SIGHUP  = 1   # Hangup
+    SIGINT  = 2   # Interrupt
+    SIGQUIT = 3   # Quit
+    SIGKILL = 9   # Kill (cannot be caught)
+    SIGUSR1 = 10  # User-defined 1
+    SIGUSR2 = 12  # User-defined 2
+    SIGTERM = 15  # Termination
+    SIGCONT = 18  # Continue
+    SIGSTOP = 19  # Stop (cannot be caught)
+    SIGTSTP = 20  # Terminal stop
+```
+
+### ResourceLimit / ProcessLimits
+
+```python
+@dataclass
+class core.limits.ResourceLimit:
+    soft: Optional[int]      # enforced ceiling; None = unlimited
+    hard: Optional[int]      # absolute maximum; None = unlimited
+
+    def check(value: int) -> bool        # True if within soft limit
+    def check_hard(value: int) -> bool   # True if within hard limit
+
+@dataclass
+class core.limits.ProcessLimits:
+    pid: int
+    limits: Dict[ResourceType, ResourceLimit]
+
+    def get_limit(resource) -> ResourceLimit
+    def set_limit(resource, soft, hard=None) -> bool
+```
+
+### CGroup
+
+```python
+@dataclass
+class core.limits.CGroup:
+    name: str
+    parent: Optional[str]
+    pids: List[int]
+    cpu_shares: int          # relative CPU weight (default 1024)
+    cpu_quota: Optional[int] # microseconds per period; None = unlimited
+    cpu_period: int          # microseconds (default 100000)
+    memory_limit: Optional[int]
+    memory_soft_limit: Optional[int]
+    io_weight: int           # 100–1000, default 500
+    pids_max: Optional[int]
+
+    def add_process(pid) -> bool
+    def remove_process(pid) -> bool
+    def check_memory_limit(requested) -> bool
+    def update_memory_usage(delta) -> None
+```
+
+### NetworkInterface
+
+```python
+@dataclass
+class core.network.NetworkInterface:
+    name: str
+    ip_address: str          # e.g. "192.168.1.100"
+    netmask: str             # e.g. "255.255.255.0"
+    mac_address: str         # e.g. "52:54:00:12:34:56"
+    state: NetworkState      # UP, DOWN
+    mtu: int                 # default 1500
+    rx_bytes: int
+    tx_bytes: int
+    rx_packets: int
+    tx_packets: int
+
+    def get_cidr() -> str           # "192.168.1.100/24"
+    def get_network_address() -> str
+    def get_broadcast() -> str
+```
+
+### Service
+
+```python
+@dataclass
+class core.init.Service:
+    name: str                   # e.g. "nginx.service"
+    description: str
+    service_type: ServiceType   # SIMPLE, FORKING, ONESHOT, NOTIFY, IDLE
+    exec_start: Optional[Callable]
+    exec_stop: Optional[Callable]
+    exec_reload: Optional[Callable]
+    restart_policy: str         # "no", "always", "on-success", "on-failure"
+    restart_delay: float        # seconds
+    state: ServiceState
+    enabled: bool
+    dependencies: List[str]
+    after: List[str]
+    environment: Dict[str, str]
+    user: str                   # default "root"
+    restart_count: int
+    start_time: Optional[float]
+    last_exit_code: Optional[int]
+
+    def uptime() -> float       # seconds since start, 0.0 if not active
+```
+
+---
+
+*PureOS API Reference — generated from source. All APIs use Python standard library only.*
