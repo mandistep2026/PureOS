@@ -604,7 +604,7 @@ class ScriptExecutor:
             print("bash: syntax error in case statement")
             return 1
 
-        from shell.scripting import TokenType as TT
+        TT = TokenType  # alias for readability
         if word_tok.type == TT.VARIABLE:
             word = self.vars.get(word_tok.value) or ''
         else:
