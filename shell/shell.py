@@ -5602,6 +5602,19 @@ class PstreeCommand(ShellCommand):
     def execute(self, args: List[str], shell) -> int:
         show_pids = '-p' in args
         processes = shell.kernel.list_processes()
+
+        # If no processes are tracked, show a minimal init-based tree
+        if not processes:
+            import os as _os
+            pid = _os.getpid()
+            if show_pids:
+                print(f"init({pid})")
+                print(f"└── pureos({pid})")
+            else:
+                print("init")
+                print("└── pureos")
+            return 0
+
         # Build parent->children map
         children: Dict[Optional[int], List] = {}
         for p in processes:
