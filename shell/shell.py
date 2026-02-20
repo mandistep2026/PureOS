@@ -647,7 +647,7 @@ class Shell:
 
             # Parse redirections for this segment
             seg_cmd, output_file, append_mode = self._parse_output_redirection(segment)
-            input_file = None
+            seg_cmd, err_file, err_append = self._parse_error_redirection(seg_cmd)
             seg_cmd, input_file = self._parse_input_redirection(seg_cmd)
 
             command_name, args = self.parse_input(seg_cmd)
@@ -665,13 +665,17 @@ class Shell:
             elif pipeline_input is not None:
                 sys.stdin = StringIO(pipeline_input)
 
-            # Capture stdout (always for intermediate, or when redirecting final)
+            # Capture stdout/stderr (always for intermediate, or when redirecting)
             is_last = (idx == len(segments) - 1)
             old_stdout = sys.stdout
+            old_stderr = sys.stderr
             capture_output = (not is_last) or (output_file is not None)
             out_buf = StringIO() if capture_output else None
+            err_buf = StringIO() if err_file is not None else None
             if out_buf:
                 sys.stdout = out_buf
+            if err_buf:
+                sys.stderr = err_buf
 
             try:
                 if command_name in self.commands:
@@ -679,16 +683,19 @@ class Shell:
                         last_exit = self.commands[command_name].execute(args, self)
                     except Exception as e:
                         sys.stdout = old_stdout
+                        sys.stderr = old_stderr
                         sys.stdin = old_stdin
                         print(f"Error: {e}")
                         last_exit = 1
                 else:
                     sys.stdout = old_stdout
+                    sys.stderr = old_stderr
                     sys.stdin = old_stdin
                     print(f"{command_name}: command not found")
                     last_exit = 127
             finally:
                 sys.stdout = old_stdout
+                sys.stderr = old_stderr
                 sys.stdin = old_stdin
 
             # Handle output
@@ -708,6 +715,16 @@ class Shell:
                     pipeline_input = captured
             else:
                 pipeline_input = None
+
+            if err_buf:
+                captured_err = err_buf.getvalue()
+                err_buf.close()
+                existing_err = b""
+                if err_append and self.fs.exists(err_file):
+                    ex = self.fs.read_file(err_file)
+                    if ex:
+                        existing_err = ex
+                self.fs.write_file(err_file, existing_err + captured_err.encode('utf-8'))
 
         self.last_exit_code = last_exit
         return last_exit
