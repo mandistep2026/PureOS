@@ -368,6 +368,9 @@ class DigCommand(ShellCommand):
 
         ip = self.nm.resolve_hostname(target)
 
+        rc = self.nm.get_resolver_config()
+        ns = rc.nameservers[0] if rc.nameservers else "127.0.0.1"
+
         shell.print("; <<>> DiG 9.18.1 <<>> " + target)
         shell.print(";; global options: +cmd")
         shell.print(";; Got answer:")
@@ -384,7 +387,7 @@ class DigCommand(ShellCommand):
         else:
             shell.print(f"{target}.         86400   IN      A       192.0.2.1")
         shell.print(";; Query time: 5 msec")
-        shell.print(";; SERVER: 192.168.1.1#53(192.168.1.1)")
+        shell.print(f";; SERVER: {ns}#53({ns})")
         shell.print(";; WHEN: " + time.strftime("%a %b %d %H:%M:%S %Z %Y"))
         shell.print(";; MSG SIZE  rcvd: 56")
 
