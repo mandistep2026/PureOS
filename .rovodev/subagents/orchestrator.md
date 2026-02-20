@@ -3,12 +3,11 @@ name: orchestrator
 description: "Team coordinator & workflow manager \u2014 decomposes tasks, delegates\
   \ to specialized subagents, tracks progress, synthesizes results"
 tools:
-- invoke_subagent
 - open_files
 - expand_code_chunks
 - grep
 - expand_folder
-model: claude-sonnet-4-6
+model: openai-responses-api:gpt-5.2-codex
 load_memory: true
 additional_memory_file: ''
 ---
