@@ -108,7 +108,25 @@ class PersistenceManager:
             # Restore current directory
             if filesystem and "current_directory" in state:
                 filesystem.change_directory(state["current_directory"])
-            
+
+            # Restore DNS resolver config
+            dns_cfg = state.get("dns_config")
+            if dns_cfg and shell:
+                nm = getattr(shell, 'network_manager', None)
+                if nm is not None:
+                    from core.network import ResolverConfig
+                    rc = ResolverConfig(
+                        nameservers=dns_cfg.get("nameservers", ["8.8.8.8", "8.8.4.4"]),
+                        search=dns_cfg.get("search", []),
+                    )
+                    nm.set_resolver_config(rc)
+                    # Sync /etc/resolv.conf with restored config
+                    if filesystem:
+                        filesystem.write_file(
+                            "/etc/resolv.conf",
+                            rc.to_resolv_conf().encode("utf-8"),
+                        )
+
             return True
         except Exception as e:
             print(f"Error loading state: {e}")
