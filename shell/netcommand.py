@@ -452,3 +452,96 @@ class ArpCommand(ShellCommand):
         shell.print("192.168.1.10            ether   aa:bb:cc:dd:ee:ff   C                     eth0")
 
         return 0
+
+
+class ResolvconfCommand(ShellCommand):
+    """View or set DNS resolver configuration (/etc/resolv.conf)."""
+
+    USAGE = (
+        "Usage: resolvconf [OPTIONS]\n"
+        "  (no args)            Show current DNS configuration\n"
+        "  -n <ns> [<ns2> ...]  Set nameserver(s)\n"
+        "  -s <dom> [<dom2> ...]  Set search domain(s)\n"
+        "  --set <key>=<value>  Set a single key (nameserver|search)\n"
+    )
+
+    def __init__(self, network_manager=None):
+        super().__init__("resolvconf", "View or set DNS resolver configuration")
+        self.nm = network_manager
+
+    def execute(self, args: List[str], shell) -> int:
+        if not self.nm:
+            self.nm = shell.network_manager
+
+        if not args:
+            return self._show(shell)
+
+        if args[0] in ("-h", "--help"):
+            shell.print(self.USAGE)
+            return 0
+
+        if args[0] == "-n":
+            # Set nameservers
+            servers = args[1:]
+            if not servers:
+                shell.print("resolvconf: -n requires at least one nameserver")
+                return 1
+            return self._set_nameservers(shell, servers)
+
+        if args[0] == "-s":
+            # Set search domains
+            domains = args[1:]
+            if not domains:
+                shell.print("resolvconf: -s requires at least one search domain")
+                return 1
+            return self._set_search(shell, domains)
+
+        if args[0] == "--set":
+            # --set key=value
+            for token in args[1:]:
+                if "=" not in token:
+                    shell.print(f"resolvconf: invalid --set token '{token}' (expect key=value)")
+                    return 1
+                key, _, value = token.partition("=")
+                if key == "nameserver":
+                    self.nm.set_nameservers([v.strip() for v in value.split(",")])
+                elif key == "search":
+                    self.nm.set_search_domains([v.strip() for v in value.split(",")])
+                else:
+                    shell.print(f"resolvconf: unknown key '{key}'")
+                    return 1
+            self._sync_fs(shell)
+            return 0
+
+        shell.print(f"resolvconf: unknown option '{args[0]}'")
+        shell.print(self.USAGE)
+        return 1
+
+    def _show(self, shell) -> int:
+        rc = self.nm.get_resolver_config()
+        content = rc.to_resolv_conf()
+        if content:
+            shell.print(content.rstrip())
+        else:
+            shell.print("# /etc/resolv.conf is empty")
+        return 0
+
+    def _set_nameservers(self, shell, servers: List[str]) -> int:
+        self.nm.set_nameservers(servers)
+        self._sync_fs(shell)
+        shell.print(f"DNS nameservers set to: {', '.join(servers)}")
+        return 0
+
+    def _set_search(self, shell, domains: List[str]) -> int:
+        self.nm.set_search_domains(domains)
+        self._sync_fs(shell)
+        shell.print(f"DNS search domains set to: {', '.join(domains)}")
+        return 0
+
+    def _sync_fs(self, shell) -> None:
+        """Write the current resolver config to /etc/resolv.conf in the VFS."""
+        rc = self.nm.get_resolver_config()
+        content = rc.to_resolv_conf().encode("utf-8")
+        fs = getattr(shell, 'fs', None) or getattr(shell, 'filesystem', None)
+        if fs is not None:
+            fs.write_file("/etc/resolv.conf", content)
