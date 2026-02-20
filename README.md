@@ -424,10 +424,19 @@ When a background job completes, you'll see:
 - [x] Job control - Background processes (`&`, `fg`, `bg`, `jobs`) ✓ **v1.4**
 - [x] Package manager - Install/remove software packages ✓ **v1.5**
 - [x] Network stack simulation - Virtual networking ✓ **v1.6**
+- [x] Pipe support (`cmd1 | cmd2 | cmd3`) ✓ **v1.7**
+- [x] Stdin redirection (`cmd < file`) ✓ **v1.7**
+- [x] `ln` - Symbolic and hard links ✓ **v1.7**
+- [x] `diff` - File comparison (unified and normal output) ✓ **v1.7**
+- [x] `tee` - Read stdin, write to stdout and files ✓ **v1.7**
+- [x] `tar` - Virtual archive creation and extraction ✓ **v1.7**
+- [x] `cron` - Job scheduler (add/remove/pause/resume) ✓ **v1.7**
+- [x] `top` - Process monitor snapshot ✓ **v1.7**
+- [x] System files (`/etc/motd`, `/etc/hostname`, `/proc/version`) ✓ **v1.7**
 
 ### Planned Features
 - [ ] Graphical interface (using curses)
-- [ ] More utilities: `find`, `tar`, `gzip`
+- [ ] `awk` / `sed` stream editors
 
 ## What's New in v1.5
 
