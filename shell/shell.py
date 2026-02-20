@@ -247,6 +247,22 @@ class Shell:
         self.register_command(ColumnCommand())
         self.register_command(StraceCommand())
         self.register_command(InstallCommand())
+        
+        # v2.0 system commands (logging, IPC, services, resources)
+        try:
+            from shell.systemcommands import (
+                DmesgCommand, LoggerCommand, JournalctlCommand,
+                SystemctlCommand, UlimitCommand, IpcsCommand, CgroupCommand
+            )
+            self.register_command(DmesgCommand())
+            self.register_command(LoggerCommand())
+            self.register_command(JournalctlCommand())
+            self.register_command(SystemctlCommand())
+            self.register_command(UlimitCommand())
+            self.register_command(IpcsCommand())
+            self.register_command(CgroupCommand())
+        except ImportError:
+            pass
 
     def register_command(self, command: ShellCommand) -> None:
         """Register a command."""

@@ -142,6 +142,46 @@ class Kernel:
         self._shutdown = False
         self._kernel_thread: Optional[threading.Thread] = None
         self._boot_time: Optional[float] = None
+        
+        # Initialize new subsystems
+        self.logger = None
+        self.ipc_manager = None
+        self.init_system = None
+        self.resource_manager = None
+        
+        try:
+            from core.logging import SystemLogger, LogLevel, LogFacility, log_kernel
+            self.logger = SystemLogger()
+            log_kernel(self.logger, LogLevel.INFO, "PureOS kernel initializing")
+        except ImportError:
+            pass
+        
+        try:
+            from core.ipc import IPCManager
+            self.ipc_manager = IPCManager()
+            if self.logger:
+                from core.logging import LogLevel, LogFacility
+                self.logger.log(LogLevel.INFO, LogFacility.KERN, "IPC manager initialized", "kernel", 0)
+        except ImportError:
+            pass
+        
+        try:
+            from core.init import InitSystem
+            self.init_system = InitSystem(self, self.logger)
+            if self.logger:
+                from core.logging import LogLevel, LogFacility
+                self.logger.log(LogLevel.INFO, LogFacility.KERN, "Init system initialized", "kernel", 0)
+        except ImportError:
+            pass
+        
+        try:
+            from core.limits import ResourceManager
+            self.resource_manager = ResourceManager(self)
+            if self.logger:
+                from core.logging import LogLevel, LogFacility
+                self.logger.log(LogLevel.INFO, LogFacility.KERN, "Resource manager initialized", "kernel", 0)
+        except ImportError:
+            pass
     
     def create_process(self, name: str, code: Callable, 
                       priority: int = 5, 
@@ -241,6 +281,11 @@ class Kernel:
         self._boot_time = time.time()
         self._kernel_thread = threading.Thread(target=self._kernel_loop, daemon=True)
         self._kernel_thread.start()
+        
+        if self.logger:
+            from core.logging import LogLevel, LogFacility
+            self.logger.log(LogLevel.NOTICE, LogFacility.KERN, 
+                          "PureOS kernel started", "kernel", 0)
     
     def stop(self) -> None:
         """Stop the kernel."""
