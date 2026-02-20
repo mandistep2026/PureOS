@@ -13,6 +13,38 @@ from enum import Enum
 import socket as sys_socket
 
 
+@dataclass
+class ResolverConfig:
+    """DNS resolver configuration, mirroring /etc/resolv.conf."""
+    nameservers: List[str] = field(default_factory=lambda: ["8.8.8.8", "8.8.4.4"])
+    search: List[str] = field(default_factory=list)
+
+    def to_resolv_conf(self) -> str:
+        """Render as /etc/resolv.conf content."""
+        lines = []
+        for ns in self.nameservers:
+            lines.append(f"nameserver {ns}")
+        if self.search:
+            lines.append(f"search {' '.join(self.search)}")
+        return "\n".join(lines) + "\n" if lines else ""
+
+    @classmethod
+    def from_resolv_conf(cls, text: str) -> "ResolverConfig":
+        """Parse /etc/resolv.conf content into a ResolverConfig."""
+        nameservers: List[str] = []
+        search: List[str] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if parts[0] == "nameserver" and len(parts) >= 2:
+                nameservers.append(parts[1])
+            elif parts[0] == "search" and len(parts) >= 2:
+                search = parts[1:]
+        return cls(nameservers=nameservers, search=search)
+
+
 class NetworkState(Enum):
     UP = "up"
     DOWN = "down"
