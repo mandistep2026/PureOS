@@ -2,6 +2,7 @@
 Integration tests for the resolvectl status command.
 """
 
+import re
 import unittest
 
 from tests.base import BaseTestCase
@@ -72,6 +73,14 @@ class TestResolvectlStatusCommand(BaseTestCase):
         )
         self.assertIn("corp.local", text)
         self.assertIn("example.com", text)
+
+    def test_resolvectl_status_reports_link_state_and_cidr(self):
+        self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
+        content = self.fs.read_file("/tmp/resolvectl_status.txt")
+        self.assertIsNotNone(content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertRegex(text, r"\bState: (UP|DOWN)\b")
+        self.assertRegex(text, r"\bAddress: \d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b")
 
 
 if __name__ == "__main__":
