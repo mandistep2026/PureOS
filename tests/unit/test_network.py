@@ -443,23 +443,28 @@ class TestPingCommand(BaseTestCase):
         # but more importantly: the flag parser should not crash.
         self.assertIn(rc, (0, 1), "ping -t <missing> should return a valid exit code.")
 
-    def test_t_flag_zero_emits_correct_result_line_count(self):
-        """-t 0 should still emit exactly the default count of result lines."""
+    def test_t_flag_zero_rejected_no_result_lines(self):
+        """-t 0 is rejected as invalid; no icmp_seq result lines should be emitted."""
         self._execute(["-t", "0", "8.8.8.8"])
         result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
         self.assertEqual(
             len(result_lines),
-            4,
-            "ping -t 0 with default count should emit 4 result lines.",
+            0,
+            "ping -t 0 should be rejected before pinging, so no result lines are emitted.",
         )
 
-    def test_t_flag_zero_all_result_lines_show_failed(self):
-        """-t 0 should mark every result line as FAILED."""
-        self._execute(["-t", "0", "8.8.8.8"])
+    def test_t_flag_tiny_positive_all_result_lines_show_failed(self):
+        """-t 0.0001 (0.1 ms threshold) should mark all 8.8.8.8 packets as FAILED."""
+        # 8.8.8.8 rtt_base=25 ms >> 0.1 ms threshold, so all packets fail.
+        self._execute(["-t", "0.0001", "8.8.8.8"])
         result_lines = [l for l in self.shell.output if "icmp_seq=" in l]
         self.assertTrue(
+            len(result_lines) > 0,
+            "Result lines should be present for a valid (tiny positive) timeout.",
+        )
+        self.assertTrue(
             all("FAILED" in line for line in result_lines),
-            "All result lines should show FAILED when timeout=0.",
+            "All result lines should show FAILED when timeout=0.0001 s (0.1 ms threshold).",
         )
 
     def test_t_flag_large_all_result_lines_show_ok(self):
