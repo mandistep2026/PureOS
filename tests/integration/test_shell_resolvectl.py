@@ -30,6 +30,14 @@ class TestResolvectlStatusCommand(BaseTestCase):
         self.assertIn("Current DNS Server", text)
         self.assertIn("8.8.8.8", text)
 
+    def test_resolvectl_status_reports_hostname(self):
+        self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
+        content = self.fs.read_file("/tmp/resolvectl_status.txt")
+        self.assertIsNotNone(content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertIn("Hostname", text)
+        self.assertIn(self.nm.get_hostname(), text)
+
     def test_resolvectl_status_reports_dns_servers(self):
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
@@ -44,7 +52,11 @@ class TestResolvectlStatusCommand(BaseTestCase):
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
         text = content.decode("utf-8", errors="replace")
-        self.assertTrue("DNS Domain" in text or "Search Domains" in text)
+        self.assertTrue(
+            "DNS Domain" in text
+            or "DNS Domains" in text
+            or "Search Domains" in text
+        )
         self.assertIn("corp.local", text)
 
     def test_resolvectl_status_reports_multiple_dns_domains(self):
