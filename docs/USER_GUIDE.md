@@ -880,3 +880,759 @@ vmstat                            # Virtual memory statistics
 ```
 
 ---
+
+## 4. Shell Scripting
+
+PureOS includes a full shell scripting engine. Scripts use standard Bourne-shell syntax and are executed with the `bash` command.
+
+### 4.1 Running Scripts
+
+```bash
+bash myscript.sh                  # Execute a script file
+bash myscript.sh arg1 arg2        # Pass arguments to a script
+source myscript.sh                # Run script in the current shell context
+. myscript.sh                     # Shorthand for source
+```
+
+Script files should be stored in the virtual filesystem. Start every script with a comment header:
+
+```bash
+#!/bin/sh
+# My first PureOS script
+echo "Hello from PureOS!"
+```
+
+Create and run a script:
+
+```bash
+nano hello.sh                     # Open editor to create the file
+bash hello.sh                     # Run it
+```
+
+### 4.2 Variables
+
+```bash
+# Assign a variable (no spaces around =)
+name="alice"
+count=42
+greeting="Hello, World"
+
+# Use a variable with $
+echo $name
+echo "Welcome, $name!"
+echo "Count is: $count"
+
+# Brace syntax (recommended for clarity and adjacent text)
+echo "${name}'s home directory"
+prefix="file"
+echo "${prefix}_001.txt"
+
+# Export to make available to child processes
+export PATH="/usr/local/bin:$PATH"
+export MY_VAR="value"
+
+# Unset a variable
+unset count
+```
+
+#### Special Variables
+
+| Variable | Meaning                                  |
+|----------|------------------------------------------|
+| `$?`     | Exit code of the last command            |
+| `$$`     | PID of the current shell process         |
+| `$0`     | Name of the script                       |
+| `$1`–`$9`| Positional arguments passed to script    |
+| `$#`     | Number of arguments                      |
+| `$@`     | All arguments as separate words          |
+| `$HOME`  | Current user's home directory            |
+| `$USER`  | Current username                         |
+| `$PATH`  | Command search path                      |
+
+#### Parameter Expansion
+
+```bash
+echo ${name:-"default"}           # Use "default" if name is unset or empty
+echo ${name:="fallback"}          # Assign "fallback" if name is unset
+echo ${name:?"Error: name required"}  # Error if name is unset
+echo ${name:+"set"}               # Output "set" only if name is defined
+echo ${#name}                     # Length of $name
+```
+
+#### Arithmetic Expansion
+
+```bash
+result=$((5 + 3))
+echo $result                      # 8
+
+x=10
+y=3
+echo $((x * y))                   # 30
+echo $((x / y))                   # 3  (integer division)
+echo $((x % y))                   # 1  (remainder)
+echo $((x ** 2))                  # 100 (exponentiation)
+echo $((x + y * 2))               # 16  (standard precedence)
+```
+
+#### Command Substitution
+
+Capture the output of a command into a variable:
+
+```bash
+today=$(date)
+echo "Today is: $today"
+
+num_files=$(ls | wc -l)
+echo "There are $num_files files here"
+
+current_dir=$(pwd)
+echo "Working in: $current_dir"
+```
+
+### 4.3 Input and Output Redirection
+
+```bash
+echo "Hello" > file.txt           # Write stdout to file (overwrite)
+echo "World" >> file.txt          # Append stdout to file
+sort < unsorted.txt               # Read stdin from file
+sort < unsorted.txt > sorted.txt  # Redirect both stdin and stdout
+grep error app.log 2> errors.txt  # Redirect stderr to file
+grep error app.log 2>> errors.txt # Append stderr to file
+grep error app.log &> all.txt     # Redirect both stdout and stderr
+grep error app.log 2>&1           # Merge stderr into stdout
+
+# Here-document: feed multi-line text as stdin
+cat << EOF
+Line one
+Line two
+Line three
+EOF
+
+# Tee: write to both stdout and a file simultaneously
+ps | tee process_list.txt
+```
+
+### 4.4 Conditionals
+
+#### if / elif / else
+
+```bash
+#!/bin/sh
+
+# Basic if
+if [ "$name" = "root" ]; then
+    echo "Welcome, administrator!"
+fi
+
+# if/else
+if [ $count -gt 10 ]; then
+    echo "Count is large"
+else
+    echo "Count is small"
+fi
+
+# if/elif/else
+score=75
+if [ $score -ge 90 ]; then
+    echo "Grade: A"
+elif [ $score -ge 80 ]; then
+    echo "Grade: B"
+elif [ $score -ge 70 ]; then
+    echo "Grade: C"
+else
+    echo "Grade: F"
+fi
+```
+
+#### Test Expressions
+
+**File tests:**
+
+| Expression      | True if...                        |
+|-----------------|-----------------------------------|
+| `[ -f file ]`   | file exists and is a regular file |
+| `[ -d dir ]`    | dir exists and is a directory     |
+| `[ -e path ]`   | path exists (any type)            |
+| `[ -s file ]`   | file exists and is non-empty      |
+
+**String comparisons:**
+
+| Expression          | True if...              |
+|---------------------|-------------------------|
+| `[ "$a" = "$b" ]`   | strings are equal       |
+| `[ "$a" != "$b" ]`  | strings are not equal   |
+| `[ -z "$a" ]`       | string is empty         |
+| `[ -n "$a" ]`       | string is non-empty     |
+
+**Numeric comparisons:**
+
+| Expression       | True if...              |
+|------------------|-------------------------|
+| `[ $a -eq $b ]`  | a equals b              |
+| `[ $a -ne $b ]`  | a not equal to b        |
+| `[ $a -lt $b ]`  | a less than b           |
+| `[ $a -le $b ]`  | a less than or equal b  |
+| `[ $a -gt $b ]`  | a greater than b        |
+| `[ $a -ge $b ]`  | a greater than or equal |
+
+#### Boolean Chains
+
+```bash
+# && runs the second command only if the first succeeds
+mkdir /tmp/mydir && echo "Directory created"
+
+# || runs the second command only if the first fails
+rm oldfile.txt || echo "File not found"
+
+# Combine checks
+[ -f config.txt ] && [ -s config.txt ] && echo "Config file ready"
+```
+
+#### case / esac
+
+Use `case` for matching a value against multiple patterns:
+
+```bash
+#!/bin/sh
+
+day="Monday"
+
+case $day in
+    Monday|Tuesday|Wednesday|Thursday|Friday)
+        echo "$day is a weekday"
+        ;;
+    Saturday|Sunday)
+        echo "$day is the weekend"
+        ;;
+    *)
+        echo "Unknown day: $day"
+        ;;
+esac
+```
+
+```bash
+#!/bin/sh
+
+# Matching command-line arguments
+command=$1
+
+case $command in
+    start)
+        echo "Starting service..."
+        ;;
+    stop)
+        echo "Stopping service..."
+        ;;
+    restart)
+        echo "Restarting service..."
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        ;;
+esac
+```
+
+### 4.5 Loops
+
+#### for Loop
+
+```bash
+# Iterate over a list of words
+for fruit in apple banana cherry; do
+    echo "Fruit: $fruit"
+done
+
+# Iterate over files
+for file in *.txt; do
+    echo "Processing: $file"
+    wc -l $file
+done
+
+# Iterate over a numeric range using seq
+for i in $(seq 1 5); do
+    echo "Step $i"
+done
+
+# C-style arithmetic loop
+for i in $(seq 0 2 10); do
+    echo "Even number: $i"
+done
+```
+
+#### while Loop
+
+```bash
+# Count down
+count=5
+while [ $count -gt 0 ]; do
+    echo "Countdown: $count"
+    count=$((count - 1))
+done
+echo "Liftoff!"
+
+# Read lines from a file
+while read line; do
+    echo "Line: $line"
+done < myfile.txt
+
+# Process with a counter
+i=1
+while [ $i -le 10 ]; do
+    echo "Iteration $i"
+    i=$((i + 1))
+done
+```
+
+### 4.6 Functions
+
+```bash
+#!/bin/sh
+
+# Define a function
+greet() {
+    name=$1
+    echo "Hello, $name!"
+}
+
+# Call the function
+greet "alice"
+greet "bob"
+
+# Function with return value (via exit code)
+is_even() {
+    number=$1
+    if [ $((number % 2)) -eq 0 ]; then
+        return 0   # 0 = true/success
+    else
+        return 1   # non-zero = false/failure
+    fi
+}
+
+if is_even 4; then
+    echo "4 is even"
+fi
+
+# Function capturing output
+get_username() {
+    echo "$(whoami)"
+}
+
+user=$(get_username)
+echo "Current user: $user"
+```
+
+### 4.7 A Complete Script Example
+
+Here is a practical script that backs up a directory and logs results:
+
+```bash
+#!/bin/sh
+# backup.sh — Back up a directory with timestamp
+
+TARGET_DIR=$1
+BACKUP_DIR="/tmp/backups"
+LOG_FILE="/tmp/backup.log"
+
+# Validate argument
+if [ -z "$TARGET_DIR" ]; then
+    echo "Usage: bash backup.sh <directory>"
+    exit 1
+fi
+
+# Check directory exists
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "Error: '$TARGET_DIR' is not a directory"
+    exit 1
+fi
+
+# Create backup directory if needed
+mkdir -p $BACKUP_DIR
+
+# Generate archive name
+timestamp=$(date)
+archive="$BACKUP_DIR/backup_$timestamp.tar"
+
+# Create the archive
+tar -cf $archive $TARGET_DIR
+exit_code=$?
+
+if [ $exit_code -eq 0 ]; then
+    msg="Backup of $TARGET_DIR completed: $archive"
+    echo $msg
+    logger "$msg"
+else
+    msg="Backup of $TARGET_DIR FAILED"
+    echo $msg
+    logger -p err "$msg"
+    exit 1
+fi
+```
+
+Run it with:
+
+```bash
+bash backup.sh /home/alice
+```
+
+### 4.8 Command History
+
+```bash
+history                           # Show all commands in history
+history 20                        # Show last 20 commands
+!!                                # Repeat the last command
+!5                                # Repeat command number 5 from history
+```
+
+### 4.9 Aliases
+
+```bash
+alias                             # List all current aliases
+alias ll='ls -la'                 # Define an alias
+alias cls='clear'
+alias grep='grep -n'              # Always show line numbers
+
+# Built-in aliases available by default:
+ll                                # Expands to: ls -la
+la                                # Expands to: ls -a
+l                                 # Expands to: ls -CF
+
+unalias ll                        # Remove a specific alias
+unalias -a                        # Remove all aliases
+```
+
+### 4.10 Tab Completion and Line Editing
+
+**Tab completion:**
+
+| Context                 | What completes              |
+|-------------------------|-----------------------------|
+| `ec<TAB>`               | `echo`                      |
+| `/ho<TAB>`              | `/home/`                    |
+| `su ro<TAB>`            | `su root`                   |
+| `echo $HO<TAB>`         | `echo $HOME`                |
+| Double-`<TAB>`          | Show all matching options   |
+
+**Line editing shortcuts:**
+
+| Key         | Action                               |
+|-------------|--------------------------------------|
+| `Ctrl+A`    | Move cursor to beginning of line     |
+| `Ctrl+E`    | Move cursor to end of line           |
+| `Ctrl+K`    | Cut from cursor to end of line       |
+| `Ctrl+U`    | Cut from cursor to start of line     |
+| `Ctrl+W`    | Delete previous word                 |
+| `Ctrl+Y`    | Paste (yank) cut text                |
+| `Ctrl+R`    | Search command history               |
+| `Ctrl+L`    | Clear the screen                     |
+| `↑` / `↓`  | Navigate command history             |
+
+**Multi-line input:** End a line with `\` to continue on the next line:
+
+```bash
+echo "This is a very long \
+command that spans \
+multiple lines"
+```
+
+### 4.11 Prompt Customization
+
+The prompt is controlled by the `PS1` environment variable. Escape sequences:
+
+| Sequence | Meaning                        |
+|----------|--------------------------------|
+| `\u`     | Current username               |
+| `\h`     | Hostname                       |
+| `\w`     | Full current working directory |
+| `\W`     | Basename of current directory  |
+| `\$`     | `$` for users, `#` for root    |
+| `\t`     | Current time (24h HH:MM:SS)    |
+| `\d`     | Current date (Day Mon DD)      |
+
+```bash
+# Set a custom prompt
+export PS1="\u@\h [\t] \w\$ "
+
+# Minimal prompt
+export PS1="\$ "
+
+# Show only current directory name
+export PS1="[\W]\$ "
+```
+
+---
+
+## 5. Text Editor
+
+PureOS includes a built-in nano-like text editor invoked with `nano`.
+
+### 5.1 Opening the Editor
+
+```bash
+nano                              # Open editor with no file (unsaved buffer)
+nano notes.txt                    # Open or create notes.txt
+nano /etc/motd                    # Edit a system file (requires root)
+```
+
+When you open the editor, you see:
+
+```
+┌──────────────────────────── PureOS Editor 1.0 - notes.txt ────────────────────────────┐
+│                                                                                         │
+│   1  First line of text                                                                 │
+│>  2  Second line (cursor here, highlighted)                                             │
+│   3  Third line                                                                         │
+│                                                                                         │
+│─────────────────────────────────────────────────────────────────────────────────────────│
+│ Ctrl+S: Save | Ctrl+Q: Quit | Ctrl+N: New Line | Ctrl+D: Delete Line | Arrows: Move   │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+The `>` marker shows the currently selected line.
+
+### 5.2 Editor Commands
+
+| Key         | Action                                  |
+|-------------|-----------------------------------------|
+| `Ctrl+S`    | Save the file                           |
+| `Ctrl+Q`    | Quit the editor                         |
+| `Ctrl+N`    | Insert a new line at cursor position    |
+| `Ctrl+D`    | Delete the current line                 |
+| `↑`         | Move cursor up one line                 |
+| `↓`         | Move cursor down one line               |
+| `←`         | Move cursor left                        |
+| `→`         | Move cursor right                       |
+
+The status bar at the top shows `[Modified]` when there are unsaved changes.
+
+### 5.3 Typical Editing Workflow
+
+```bash
+# Create and edit a script
+nano myscript.sh
+
+# Edit the file in the editor using the controls above,
+# then save with Ctrl+S, quit with Ctrl+Q.
+
+# Verify your changes
+cat myscript.sh
+
+# Run the script
+bash myscript.sh
+```
+
+### 5.4 Creating Configuration Files
+
+The editor is useful for creating configuration and data files:
+
+```bash
+# Create an /etc/motd (message of the day)
+nano /etc/motd
+
+# Create a crontab-style schedule description
+nano /home/alice/tasks.txt
+
+# Write a shell script
+nano /home/alice/cleanup.sh
+```
+
+---
+
+## 6. Troubleshooting
+
+### 6.1 Common Issues
+
+#### "command not found"
+
+```
+alice@pureos:~$ myscript
+myscript: command not found
+```
+
+**Solutions:**
+- Use `bash myscript.sh` instead of just `myscript`
+- Check spelling: `which ls`, `type grep`
+- Verify the command exists: `help` lists all available commands
+
+#### "No such file or directory"
+
+```
+cat: notes.txt: No such file or directory
+```
+
+**Solutions:**
+- Check your current directory: `pwd`
+- List files to confirm: `ls -la`
+- Use the full path: `cat /home/alice/notes.txt`
+- Check for typos in the filename
+
+#### "Permission denied"
+
+```
+rm: cannot remove '/etc/passwd': Permission denied
+```
+
+**Solutions:**
+- Switch to root: `su` (password is empty by default)
+- Check file permissions: `ls -l /etc/passwd`
+- Check your own permissions: `id`
+
+#### Login fails with "Invalid username or password"
+
+- **root**: password is empty — just press Enter at the password prompt
+- **alice**: default password is `password123`
+- If you changed a password and forgot it, start PureOS fresh (state not loaded) to reset to defaults
+
+#### Script runs but produces unexpected output
+
+```bash
+# Debug a script by adding echo statements
+echo "DEBUG: value of x is $x"
+
+# Check exit codes
+mycommand
+echo "Exit code: $?"
+
+# Trace execution (print each command before running)
+bash -x myscript.sh        # Note: -x flag is printed but script still runs normally
+```
+
+#### Background job output appears at wrong time
+
+Background job output can appear mixed with your prompt. This is normal behavior. Use `wait` to pause until all jobs complete:
+
+```bash
+long_command &
+wait
+echo "All done"
+```
+
+#### Filesystem seems full
+
+```bash
+df                            # Check overall disk usage (virtual 100MB limit)
+du -sh /home/alice            # Check a directory's size
+du -sh /tmp                   # Temporary files can accumulate
+rm /tmp/*.tar                 # Clean up temp files
+```
+
+#### Saved state causes issues on startup
+
+If a previously saved state is causing problems, choose **not** to load it at startup (answer `n` when prompted). The system will start with a fresh filesystem.
+
+To delete saved state from your real machine:
+```bash
+# On your real system (not inside PureOS)
+rm ~/.pureos/state.json
+```
+
+### 6.2 Checking System Status
+
+When something seems wrong, these commands give you a system overview:
+
+```bash
+uname -a                          # OS and kernel version
+uptime                            # How long the system has been running
+free -h                           # Memory usage
+df                                # Disk usage
+ps                                # Running processes
+who                               # Logged-in users
+dmesg | tail -20                  # Recent kernel messages
+journalctl -n 20                  # Recent journal entries
+sysdiag                           # Comprehensive health check
+```
+
+### 6.3 Understanding Exit Codes
+
+Every command returns an exit code. `0` means success; anything else means failure.
+
+```bash
+ls /tmp
+echo $?        # Outputs 0 (success)
+
+ls /nonexistent
+echo $?        # Outputs 1 (failure)
+
+grep pattern file_that_exists.txt
+# Returns 0 if pattern found, 1 if not found
+
+# Use in scripts
+if grep -q "error" logfile.txt; then
+    echo "Errors found in log"
+fi
+```
+
+### 6.4 Getting Help Inside PureOS
+
+```bash
+help                              # List all commands with one-line descriptions
+help <command>                    # Detailed help for a specific command
+type <command>                    # Show if it's a builtin, alias, or file
+which <command>                   # Find where a command lives
+```
+
+### 6.5 Running Tests
+
+If you suspect something is broken, run the test suite:
+
+```bash
+# From your real terminal (not inside PureOS):
+python main.py --test
+```
+
+A healthy system shows all 527 tests passing.
+
+---
+
+## Appendix: Quick Reference Card
+
+### Essential Daily Commands
+
+```bash
+pwd          ls           cd ~         cat
+mkdir -p     touch        cp           mv
+rm -rf       find         grep -in     sort | uniq
+wc -l        head -n 10   tail -n 10   echo
+ps           kill         top          jobs
+whoami       id           su           passwd
+history      !!           help         exit
+```
+
+### Redirection Cheatsheet
+
+| Syntax          | Effect                                 |
+|-----------------|----------------------------------------|
+| `cmd > file`    | Write stdout to file (overwrite)       |
+| `cmd >> file`   | Append stdout to file                  |
+| `cmd < file`    | Read stdin from file                   |
+| `cmd 2> file`   | Write stderr to file                   |
+| `cmd 2>&1`      | Merge stderr into stdout               |
+| `cmd &> file`   | Write both stdout and stderr to file   |
+| `cmd1 | cmd2`   | Pipe stdout of cmd1 to stdin of cmd2   |
+| `cmd << EOF`    | Here-document: inline stdin text       |
+
+### Default Users Reference
+
+| User    | Password      | UID | Home         |
+|---------|---------------|-----|--------------|
+| `root`  | *(empty)*     | 0   | `/root`      |
+| `alice` | `password123` | 1000| `/home/alice`|
+
+### Filesystem Hierarchy
+
+| Path         | Purpose                                  |
+|--------------|------------------------------------------|
+| `/`          | Root of the filesystem                   |
+| `/bin`       | Command scripts and binaries             |
+| `/etc`       | Configuration files                      |
+| `/etc/passwd`| User account database                    |
+| `/etc/group` | Group database                           |
+| `/home`      | User home directories                    |
+| `/proc`      | Kernel and process information           |
+| `/root`      | Root user's home directory               |
+| `/tmp`       | Temporary files                          |
+| `/var/log`   | Log files                                |
+
+---
+
+*PureOS v2.0.0 — Pure Python, Pure Power!*
+*Preparing for v2.1 release with enhanced monitoring and diagnostics.*
