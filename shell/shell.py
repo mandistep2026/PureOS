@@ -5201,7 +5201,7 @@ class NlCommand(ShellCommand):
 
     def execute(self, args: List[str], shell) -> int:
         # Options
-        body_numbering = 'n'  # t=non-empty, a=all, n=none
+        body_numbering = 't'  # t=non-empty (default), a=all, n=none
         start = 1
         increment = 1
         filenames: List[str] = []
