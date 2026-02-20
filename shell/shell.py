@@ -1772,31 +1772,33 @@ class WcCommand(ShellCommand):
         super().__init__("wc", "Print line, word, and byte counts for files")
 
     def execute(self, args: List[str], shell) -> int:
-        if not args:
-            print("Usage: wc [-l] [-w] [-c] <file>")
-            return 1
-
         show_lines = False
         show_words = False
         show_bytes = False
         filenames = []
 
+        parse_options = True
         for arg in args:
-            if arg == '-l':
-                show_lines = True
-            elif arg == '-w':
-                show_words = True
-            elif arg == '-c':
-                show_bytes = True
-            elif arg.startswith('-'):
-                print(f"wc: invalid option -- '{arg}'")
-                return 1
+            if parse_options and arg == '--':
+                parse_options = False
+            elif parse_options and arg in ('-l', '-w', '-c'):
+                if arg == '-l':
+                    show_lines = True
+                elif arg == '-w':
+                    show_words = True
+                elif arg == '-c':
+                    show_bytes = True
+            elif parse_options and arg.startswith('-') and arg != '-':
+                # Support grouped flags like -lw and -lwc.
+                if all(ch in 'lwc' for ch in arg[1:]):
+                    show_lines = show_lines or ('l' in arg[1:])
+                    show_words = show_words or ('w' in arg[1:])
+                    show_bytes = show_bytes or ('c' in arg[1:])
+                else:
+                    print(f"wc: invalid option -- '{arg}'")
+                    return 1
             else:
                 filenames.append(arg)
-
-        if not filenames:
-            print("wc: missing file operand")
-            return 1
 
         if not (show_lines or show_words or show_bytes):
             show_lines = True
@@ -1805,11 +1807,26 @@ class WcCommand(ShellCommand):
 
         totals = {'lines': 0, 'words': 0, 'bytes': 0}
 
-        for filename in filenames:
-            content = shell.fs.read_file(filename)
-            if content is None:
-                print(f"wc: {filename}: No such file or directory")
-                return 1
+        # Match common wc behavior:
+        # - No file operands => read stdin once.
+        # - "-" => read stdin as a pseudo-file.
+        sources = filenames if filenames else ['-']
+        stdin_consumed = False
+
+        for source in sources:
+            if source == '-':
+                if stdin_consumed:
+                    content = b""
+                else:
+                    content = sys.stdin.read().encode('utf-8', errors='replace')
+                    stdin_consumed = True
+                display_name = '-'
+            else:
+                content = shell.fs.read_file(source)
+                if content is None:
+                    print(f"wc: {source}: No such file or directory")
+                    return 1
+                display_name = source
 
             text = content.decode('utf-8', errors='replace')
             line_count = len(text.splitlines())
@@ -1827,10 +1844,10 @@ class WcCommand(ShellCommand):
                 output_parts.append(str(word_count))
             if show_bytes:
                 output_parts.append(str(byte_count))
-            output_parts.append(filename)
+            output_parts.append(display_name)
             print(' '.join(output_parts))
 
-        if len(filenames) > 1:
+        if len(sources) > 1:
             output_parts = []
             if show_lines:
                 output_parts.append(str(totals['lines']))

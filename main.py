@@ -742,6 +742,35 @@ class PureOS:
             print(f"  FAIL: {e}")
             failed += 1
 
+
+        # Test 23: wc stdin and combined flags
+        print("Test 23: wc stdin and combined flags...")
+        try:
+            import io
+            kernel = Kernel()
+            fs = FileSystem()
+            shell = Shell(kernel, fs)
+
+            assert shell.execute("echo one two > /tmp/wc_stdin.txt") == 0
+            assert shell.execute("echo three >> /tmp/wc_stdin.txt") == 0
+
+            original_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO("alpha beta\ngamma\n")
+                assert shell.execute("wc -l") == 0
+            finally:
+                sys.stdin = original_stdin
+
+            assert shell.execute("wc -lw /tmp/wc_stdin.txt > /tmp/wc_lw.txt") == 0
+            assert fs.read_file("/tmp/wc_lw.txt") == b"2 3 /tmp/wc_stdin.txt\n"
+
+            assert shell.execute("wc -z /tmp/wc_stdin.txt") == 1
+            print("  PASS")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL: {e}")
+            failed += 1
+
         print(f"\n{'='*50}")
         print(f"Test Results: {passed} passed, {failed} failed")
         
