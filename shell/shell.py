@@ -3908,7 +3908,7 @@ class SedCommand(ShellCommand):
             return 1
 
         silent = False
-        script = None
+        scripts: List[str] = []
         filenames: List[str] = []
 
         i = 0
@@ -3918,24 +3918,20 @@ class SedCommand(ShellCommand):
             elif args[i] in ('-e', '--expression'):
                 i += 1
                 if i < len(args):
-                    script = args[i]
+                    scripts.append(args[i])
             elif args[i].startswith('-e'):
-                script = args[i][2:]
-            elif script is None:
-                script = args[i]
+                scripts.append(args[i][2:])
+            elif not scripts:
+                scripts.append(args[i])
             else:
                 filenames.append(args[i])
             i += 1
 
-        if script is None:
+        if not scripts:
             print("sed: no script command")
             return 1
 
-        # Parse a series of semicolon-separated commands
-        def get_lines(source: str) -> List[str]:
-            return source.splitlines()
-
-        def read_source() -> str:
+        def read_source() -> Optional[str]:
             if not filenames:
                 return sys.stdin.read()
             parts = []
@@ -3952,35 +3948,99 @@ class SedCommand(ShellCommand):
             return 1
 
         lines = source.splitlines()
-        commands = [cmd.strip() for cmd in script.split(';') if cmd.strip()]
+        commands = []
+        for script in scripts:
+            commands.extend([cmd.strip() for cmd in script.split(';') if cmd.strip()])
+
+        # Range state keyed by command index
+        range_active: Dict[int, bool] = {idx: False for idx in range(len(commands))}
         output_lines: List[str] = []
 
+        def parse_address(address: str) -> Optional[Tuple[str, Optional[str]]]:
+            if not address:
+                return None
+            if address.startswith('/') and address.endswith('/'):
+                return ('regex', address[1:-1])
+            if address.isdigit():
+                return ('line', address)
+            return None
+
+        def parse_command(command: str) -> Tuple[Optional[Tuple[str, Optional[str]]], Optional[Tuple[str, Optional[str]]], str]:
+            text = command.strip()
+            if not text:
+                return None, None, ''
+            if text[0] == '/':
+                end = text.find('/', 1)
+                if end != -1:
+                    first = text[1:end]
+                    rest = text[end + 1:]
+                    if rest.startswith(',/'):
+                        end2 = rest.find('/', 2)
+                        if end2 != -1:
+                            second = rest[2:end2]
+                            return ('regex', first), ('regex', second), rest[end2 + 1:].strip()
+                    if rest.startswith(','):
+                        tail = rest[1:].lstrip()
+                        if tail and tail.split(None, 1)[0].isdigit():
+                            second_num = tail.split(None, 1)[0]
+                            return ('regex', first), ('line', second_num), tail[len(second_num):].strip()
+                    return ('regex', first), None, rest.strip()
+            if text[0].isdigit():
+                num = ''
+                idx = 0
+                while idx < len(text) and text[idx].isdigit():
+                    num += text[idx]
+                    idx += 1
+                rest = text[idx:].lstrip()
+                if rest.startswith(','):
+                    rest = rest[1:].lstrip()
+                    if rest.startswith('/'):
+                        end = rest.find('/', 1)
+                        if end != -1:
+                            second = rest[1:end]
+                            return ('line', num), ('regex', second), rest[end + 1:].strip()
+                    elif rest and rest.split(None, 1)[0].isdigit():
+                        second_num = rest.split(None, 1)[0]
+                        return ('line', num), ('line', second_num), rest[len(second_num):].strip()
+                return ('line', num), None, rest.strip()
+            return None, None, text
+
+        def address_matches(addr: Tuple[str, Optional[str]], line_no: int, line: str) -> bool:
+            kind, value = addr
+            if kind == 'line':
+                return line_no == int(value)
+            if kind == 'regex':
+                try:
+                    return bool(_re.search(value or '', line))
+                except _re.error as e:
+                    print(f"sed: invalid regex: {e}", file=sys.stderr)
+                    raise
+            return False
+
+        parsed_commands = []
+        for cmd in commands:
+            start, end, body = parse_command(cmd)
+            parsed_commands.append((start, end, body))
+
         for lineno, line in enumerate(lines, 1):
-            printed = False
             delete = False
-            for cmd in commands:
-                # Address prefix  (n  or  n,m  or  /pat/)
-                addr_match = _re.match(
-                    r'^(\d+(?:,\d+)?|/[^/]*/(?:,/[^/]*/)?)?(.*)$', cmd)
-                addr_str = addr_match.group(1) or ''
-                body     = addr_match.group(2).strip()
-
-                # Evaluate address
-                in_range = True
-                if addr_str:
-                    if _re.match(r'^\d+$', addr_str):
-                        in_range = lineno == int(addr_str)
-                    elif _re.match(r'^\d+,\d+$', addr_str):
-                        a, b = map(int, addr_str.split(','))
-                        in_range = a <= lineno <= b
-                    elif addr_str.startswith('/'):
-                        pat = addr_str[1:-1]
-                        in_range = bool(_re.search(pat, line))
-
-                if not in_range:
+            for idx, (start, end, body) in enumerate(parsed_commands):
+                if not body:
                     continue
 
-                if not body:
+                in_range = True
+                if start:
+                    if end:
+                        if not range_active[idx]:
+                            if address_matches(start, lineno, line):
+                                range_active[idx] = True
+                            else:
+                                in_range = False
+                        if range_active[idx] and address_matches(end, lineno, line):
+                            range_active[idx] = False
+                    else:
+                        in_range = address_matches(start, lineno, line)
+                if not in_range:
                     continue
 
                 op = body[0]
@@ -3989,8 +4049,10 @@ class SedCommand(ShellCommand):
                     # s/pattern/replacement/flags
                     delim = body[1]
                     parts = body[2:].split(delim)
-                    if len(parts) >= 3:
-                        pat_s, repl, flags_s = parts[0], parts[1], parts[2] if len(parts) > 2 else ''
+                    if len(parts) >= 2:
+                        pat_s = parts[0]
+                        repl = parts[1]
+                        flags_s = parts[2] if len(parts) > 2 else ''
                         flags_re = _re.IGNORECASE if 'i' in flags_s else 0
                         count = 0 if 'g' in flags_s else 1
                         try:
@@ -4003,7 +4065,6 @@ class SedCommand(ShellCommand):
                     break
                 elif op == 'p':
                     output_lines.append(line)
-                    printed = True
                 elif op == 'q':
                     if not silent:
                         output_lines.append(line)
