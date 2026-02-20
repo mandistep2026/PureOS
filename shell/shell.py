@@ -3703,3 +3703,831 @@ class TopCommand(ShellCommand):
             print(f"{proc.pid:<8} {proc.name:<18} {proc.state.value:<12} {proc.cpu_time:>5.2f}s {mem_kb:>6}KB")
 
         return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v1.8 NEW COMMANDS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SedCommand(ShellCommand):
+    """Stream editor – substitute, delete, print lines."""
+
+    def __init__(self):
+        super().__init__("sed", "Stream editor for filtering and transforming text")
+
+    def execute(self, args: List[str], shell) -> int:
+        import re as _re
+
+        if not args:
+            print("Usage: sed [-n] SCRIPT [file...]")
+            return 1
+
+        silent = False
+        script = None
+        filenames: List[str] = []
+
+        i = 0
+        while i < len(args):
+            if args[i] == '-n':
+                silent = True
+            elif args[i] in ('-e', '--expression'):
+                i += 1
+                if i < len(args):
+                    script = args[i]
+            elif args[i].startswith('-e'):
+                script = args[i][2:]
+            elif script is None:
+                script = args[i]
+            else:
+                filenames.append(args[i])
+            i += 1
+
+        if script is None:
+            print("sed: no script command")
+            return 1
+
+        # Parse a series of semicolon-separated commands
+        def get_lines(source: str) -> List[str]:
+            return source.splitlines()
+
+        def read_source() -> str:
+            if not filenames:
+                return sys.stdin.read()
+            parts = []
+            for fn in filenames:
+                c = shell.fs.read_file(fn)
+                if c is None:
+                    print(f"sed: {fn}: No such file or directory", file=sys.stderr)
+                    return None
+                parts.append(c.decode('utf-8', errors='replace'))
+            return ''.join(parts)
+
+        source = read_source()
+        if source is None:
+            return 1
+
+        lines = source.splitlines()
+        commands = [cmd.strip() for cmd in script.split(';') if cmd.strip()]
+        output_lines: List[str] = []
+
+        for lineno, line in enumerate(lines, 1):
+            printed = False
+            delete = False
+            for cmd in commands:
+                # Address prefix  (n  or  n,m  or  /pat/)
+                addr_match = _re.match(
+                    r'^(\d+(?:,\d+)?|/[^/]*/(?:,/[^/]*/)?)?(.*)$', cmd)
+                addr_str = addr_match.group(1) or ''
+                body     = addr_match.group(2).strip()
+
+                # Evaluate address
+                in_range = True
+                if addr_str:
+                    if _re.match(r'^\d+$', addr_str):
+                        in_range = lineno == int(addr_str)
+                    elif _re.match(r'^\d+,\d+$', addr_str):
+                        a, b = map(int, addr_str.split(','))
+                        in_range = a <= lineno <= b
+                    elif addr_str.startswith('/'):
+                        pat = addr_str[1:-1]
+                        in_range = bool(_re.search(pat, line))
+
+                if not in_range:
+                    continue
+
+                if not body:
+                    continue
+
+                op = body[0]
+
+                if op == 's':
+                    # s/pattern/replacement/flags
+                    delim = body[1]
+                    parts = body[2:].split(delim)
+                    if len(parts) >= 3:
+                        pat_s, repl, flags_s = parts[0], parts[1], parts[2] if len(parts) > 2 else ''
+                        flags_re = _re.IGNORECASE if 'i' in flags_s else 0
+                        count = 0 if 'g' in flags_s else 1
+                        try:
+                            line = _re.sub(pat_s, repl, line, count=count, flags=flags_re)
+                        except _re.error as e:
+                            print(f"sed: invalid regex: {e}", file=sys.stderr)
+                            return 1
+                elif op == 'd':
+                    delete = True
+                    break
+                elif op == 'p':
+                    output_lines.append(line)
+                    printed = True
+                elif op == 'q':
+                    if not silent:
+                        output_lines.append(line)
+                    for ol in output_lines:
+                        print(ol)
+                    return 0
+                elif op == 'y':
+                    # y/src/dst/ – transliterate
+                    delim = body[1]
+                    parts = body[2:].split(delim)
+                    if len(parts) >= 2:
+                        src_chars, dst_chars = parts[0], parts[1]
+                        table = str.maketrans(src_chars, dst_chars[:len(src_chars)])
+                        line = line.translate(table)
+
+            if not delete and not silent:
+                output_lines.append(line)
+
+        for ol in output_lines:
+            print(ol)
+        return 0
+
+
+class AwkCommand(ShellCommand):
+    """Pattern scanning and text processing (subset of awk)."""
+
+    def __init__(self):
+        super().__init__("awk", "Pattern scanning and processing language")
+
+    def execute(self, args: List[str], shell) -> int:
+        import re as _re
+
+        if not args:
+            print("Usage: awk [-F sep] 'program' [file...]")
+            return 1
+
+        sep = None
+        program = None
+        filenames: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] == '-F' and i + 1 < len(args):
+                i += 1
+                sep = args[i]
+            elif args[i].startswith('-F'):
+                sep = args[i][2:]
+            elif program is None:
+                program = args[i]
+            else:
+                filenames.append(args[i])
+            i += 1
+
+        if program is None:
+            print("awk: no program given")
+            return 1
+
+        # Parse BEGIN, END, and pattern-action blocks
+        begin_block = ''
+        end_block   = ''
+        rules: List[tuple] = []   # (pattern_str, action_str)
+
+        # Strip comments
+        program = _re.sub(r'#[^\n]*', '', program)
+
+        # Simple tokeniser: find BEGIN { }, END { }, /pat/ { }, { }
+        remaining = program.strip()
+        while remaining:
+            remaining = remaining.strip()
+            if not remaining:
+                break
+            m = _re.match(r'^BEGIN\s*\{([^}]*)\}', remaining, _re.DOTALL)
+            if m:
+                begin_block += m.group(1)
+                remaining = remaining[m.end():]
+                continue
+            m = _re.match(r'^END\s*\{([^}]*)\}', remaining, _re.DOTALL)
+            if m:
+                end_block += m.group(1)
+                remaining = remaining[m.end():]
+                continue
+            m = _re.match(r'^(/[^/]*/)?\s*\{([^}]*)\}', remaining, _re.DOTALL)
+            if m:
+                pat = m.group(1)[1:-1] if m.group(1) else None
+                action = m.group(2)
+                rules.append((pat, action))
+                remaining = remaining[m.end():]
+                continue
+            # bare pattern without braces → print if matches
+            m = _re.match(r'^(/[^/]*/)([^/\{]*?)(?=\s*/|\s*$|\s+BEGIN|\s+END)', remaining, _re.DOTALL)
+            if m:
+                rules.append((m.group(1)[1:-1], 'print'))
+                remaining = remaining[m.end():]
+                continue
+            break
+
+        # Awk variable environment
+        env: Dict[str, Any] = {
+            'NR': 0, 'NF': 0, 'FS': sep or ' ',
+            'OFS': ' ', 'ORS': '\n', 'RS': '\n',
+            'FILENAME': '', '$0': '', 'fields': [],
+        }
+
+        def set_record(line: str, filename: str):
+            env['$0'] = line
+            env['FILENAME'] = filename
+            fs = env['FS']
+            if fs == ' ':
+                flds = line.split()
+            else:
+                flds = line.split(fs)
+            env['fields'] = flds
+            env['NF'] = len(flds)
+            for idx, f in enumerate(flds, 1):
+                env[f'${idx}'] = f
+
+        def expand_vars(expr: str) -> str:
+            """Replace $N, $NF, NR, NF, $0 etc. in an expression string."""
+            expr = expr.replace('$NF', env['fields'][-1] if env['fields'] else '')
+            expr = _re.sub(r'\$(\d+)', lambda m: env.get(f'${m.group(1)}', ''), expr)
+            expr = expr.replace('NR', str(env['NR']))
+            expr = expr.replace('NF', str(env['NF']))
+            expr = expr.replace('$0', env['$0'])
+            return expr
+
+        def run_action(action: str):
+            for stmt in _re.split(r'[;\n]', action):
+                stmt = stmt.strip()
+                if not stmt:
+                    continue
+                # print [expr, ...]
+                m = _re.match(r'^print\b(.*)', stmt)
+                if m:
+                    expr = m.group(1).strip()
+                    if not expr:
+                        print(env['$0'])
+                    else:
+                        parts = [p.strip().strip('"') for p in expr.split(',')]
+                        expanded = []
+                        for p in parts:
+                            expanded.append(expand_vars(p))
+                        print(env['OFS'].join(expanded))
+                    continue
+                # printf "fmt", args
+                m = _re.match(r'^printf\s+"([^"]*)"(.*)', stmt)
+                if m:
+                    fmt = m.group(1).replace('\\n', '\n').replace('\\t', '\t')
+                    rest = m.group(2).strip().lstrip(',')
+                    vals = [expand_vars(p.strip().strip('"')) for p in rest.split(',') if p.strip()]
+                    try:
+                        sys.stdout.write(fmt % tuple(vals))
+                    except Exception:
+                        sys.stdout.write(fmt)
+                    continue
+                # var = expr (simple assignment)
+                m = _re.match(r'^(\w+)\s*=\s*(.+)$', stmt)
+                if m:
+                    var, val = m.group(1), expand_vars(m.group(2).strip().strip('"'))
+                    try:
+                        env[var] = int(val)
+                    except ValueError:
+                        try:
+                            env[var] = float(val)
+                        except ValueError:
+                            env[var] = val
+                    continue
+                # next
+                if stmt == 'next':
+                    raise StopIteration
+
+        def run_block(block: str):
+            if block.strip():
+                run_action(block)
+
+        # BEGIN
+        if begin_block:
+            run_block(begin_block)
+
+        # Process input
+        sources = []
+        if not filenames:
+            sources.append(('', sys.stdin.read()))
+        else:
+            for fn in filenames:
+                c = shell.fs.read_file(fn)
+                if c is None:
+                    print(f"awk: {fn}: No such file or directory", file=sys.stderr)
+                    return 1
+                sources.append((fn, c.decode('utf-8', errors='replace')))
+
+        for filename, text in sources:
+            for line in text.splitlines():
+                env['NR'] += 1
+                set_record(line, filename)
+                for pat, action in rules:
+                    try:
+                        if pat is None or _re.search(pat, line):
+                            run_action(action)
+                    except StopIteration:
+                        break
+
+        # END
+        if end_block:
+            run_block(end_block)
+
+        return 0
+
+
+class TrCommand(ShellCommand):
+    """Translate or delete characters."""
+
+    def __init__(self):
+        super().__init__("tr", "Translate or delete characters")
+
+    def _expand_set(self, s: str) -> str:
+        """Expand character ranges like a-z."""
+        import re as _re
+        result = []
+        i = 0
+        while i < len(s):
+            if i + 2 < len(s) and s[i + 1] == '-':
+                start, end = ord(s[i]), ord(s[i + 2])
+                if start <= end:
+                    result.extend(chr(c) for c in range(start, end + 1))
+                else:
+                    result.extend([s[i], '-', s[i + 2]])
+                i += 3
+            elif s[i] == '\\' and i + 1 < len(s):
+                esc = s[i + 1]
+                result.append({'n': '\n', 't': '\t', 'r': '\r', '\\': '\\'}.get(esc, esc))
+                i += 2
+            else:
+                result.append(s[i])
+                i += 1
+        return ''.join(result)
+
+    def execute(self, args: List[str], shell) -> int:
+        delete = False
+        squeeze = False
+        complement = False
+        sets: List[str] = []
+
+        i = 0
+        while i < len(args):
+            if args[i] == '-d':
+                delete = True
+            elif args[i] == '-s':
+                squeeze = True
+            elif args[i] == '-c':
+                complement = True
+            elif args[i].startswith('-') and len(args[i]) > 1:
+                for ch in args[i][1:]:
+                    if ch == 'd': delete = True
+                    elif ch == 's': squeeze = True
+                    elif ch == 'c': complement = True
+            else:
+                sets.append(args[i])
+            i += 1
+
+        text = sys.stdin.read()
+
+        if delete:
+            if not sets:
+                print("tr: missing operand")
+                return 1
+            del_set = set(self._expand_set(sets[0]))
+            if complement:
+                del_set = set(chr(c) for c in range(128)) - del_set
+            result = ''.join(ch for ch in text if ch not in del_set)
+        elif len(sets) >= 2:
+            src = self._expand_set(sets[0])
+            dst = self._expand_set(sets[1])
+            if complement:
+                all_chars = [chr(c) for c in range(128)]
+                src = ''.join(c for c in all_chars if c not in src)
+            # Pad dst with last char if shorter
+            if len(dst) < len(src):
+                dst = dst + dst[-1] * (len(src) - len(dst)) if dst else ''
+            table = str.maketrans(src[:len(dst)], dst[:len(src)])
+            result = text.translate(table)
+        elif len(sets) == 1 and squeeze:
+            # squeeze repeated chars in set1
+            sq_set = set(self._expand_set(sets[0]))
+            result = []
+            prev = None
+            for ch in text:
+                if ch in sq_set and ch == prev:
+                    continue
+                result.append(ch)
+                prev = ch
+            result = ''.join(result)
+        else:
+            print("tr: missing operand")
+            return 1
+
+        if squeeze and not delete and len(sets) >= 2:
+            sq_set = set(self._expand_set(sets[1]))
+            squeezed = []
+            prev = None
+            for ch in result:
+                if ch in sq_set and ch == prev:
+                    continue
+                squeezed.append(ch)
+                prev = ch
+            result = ''.join(squeezed)
+
+        sys.stdout.write(result)
+        return 0
+
+
+class XargsCommand(ShellCommand):
+    """Build and execute command lines from stdin."""
+
+    def __init__(self):
+        super().__init__("xargs", "Build and execute command lines from standard input")
+
+    def execute(self, args: List[str], shell) -> int:
+        cmd_args: List[str] = []
+        max_args = None
+        i = 0
+        while i < len(args):
+            if args[i] == '-n' and i + 1 < len(args):
+                i += 1
+                try:
+                    max_args = int(args[i])
+                except ValueError:
+                    pass
+            else:
+                cmd_args.append(args[i])
+            i += 1
+
+        if not cmd_args:
+            cmd_args = ['echo']
+
+        # Read words from stdin
+        words = sys.stdin.read().split()
+        if not words:
+            return 0
+
+        rc = 0
+        if max_args:
+            for start in range(0, len(words), max_args):
+                batch = words[start:start + max_args]
+                full_cmd = ' '.join(cmd_args + batch)
+                r = shell.execute(full_cmd)
+                if r != 0:
+                    rc = r
+        else:
+            full_cmd = ' '.join(cmd_args + words)
+            rc = shell.execute(full_cmd)
+        return rc
+
+
+class MktempCommand(ShellCommand):
+    """Create a temporary file or directory."""
+
+    def __init__(self):
+        super().__init__("mktemp", "Create a temporary file or directory")
+
+    def execute(self, args: List[str], shell) -> int:
+        import random, string
+        is_dir = '-d' in args
+        suffix = ''
+        prefix = 'tmp.'
+        # Look for template like /tmp/myXXXXXX
+        template = None
+        for a in args:
+            if not a.startswith('-'):
+                template = a
+                break
+        if template:
+            # Replace trailing X's with random chars
+            base = template.rstrip('X')
+            n_x = len(template) - len(base)
+            rand = ''.join(random.choices(string.ascii_letters + string.digits, k=max(n_x, 6)))
+            path = base + rand
+        else:
+            rand = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            path = f"/tmp/tmp.{rand}"
+
+        if is_dir:
+            rc = shell.fs.mkdir(path)
+            if rc:
+                print(f"mktemp: cannot create dir '{path}'")
+                return 1
+        else:
+            rc = shell.fs.write_file(path, b'')
+            if rc is False:
+                print(f"mktemp: cannot create file '{path}'")
+                return 1
+        print(path)
+        return 0
+
+
+class ReadlinkCommand(ShellCommand):
+    """Print resolved symlink target."""
+
+    def __init__(self):
+        super().__init__("readlink", "Print resolved symbolic link or canonical file name")
+
+    def execute(self, args: List[str], shell) -> int:
+        canonical = '-f' in args or '-e' in args or '-m' in args
+        paths = [a for a in args if not a.startswith('-')]
+        if not paths:
+            print("Usage: readlink [-f] file")
+            return 1
+        rc = 0
+        for path in paths:
+            inode = shell.fs.get_inode(path)
+            if inode is None:
+                print(f"readlink: {path}: No such file or directory", file=sys.stderr)
+                rc = 1
+                continue
+            from core.filesystem import FileType
+            if inode.type == FileType.SYMLINK:
+                target = inode.content if isinstance(inode.content, str) else path
+                print(target)
+            elif canonical:
+                print(shell.fs.resolve_path(path))
+            else:
+                print(f"readlink: {path}: not a symbolic link", file=sys.stderr)
+                rc = 1
+        return rc
+
+
+class RealpathCommand(ShellCommand):
+    """Print the resolved absolute file name."""
+
+    def __init__(self):
+        super().__init__("realpath", "Print the resolved absolute file name")
+
+    def execute(self, args: List[str], shell) -> int:
+        paths = [a for a in args if not a.startswith('-')]
+        if not paths:
+            print("Usage: realpath path [...]")
+            return 1
+        rc = 0
+        for path in paths:
+            resolved = shell.fs.resolve_path(path)
+            if not shell.fs.exists(resolved):
+                print(f"realpath: {path}: No such file or directory", file=sys.stderr)
+                rc = 1
+                continue
+            print(resolved)
+        return rc
+
+
+class WatchCommand(ShellCommand):
+    """Execute a command repeatedly, showing output."""
+
+    def __init__(self):
+        super().__init__("watch", "Execute a program periodically, showing output fullscreen")
+
+    def execute(self, args: List[str], shell) -> int:
+        import time as _time
+
+        interval = 2.0
+        count = None  # run forever unless -n count given
+        cmd_parts: List[str] = []
+        i = 0
+        while i < len(args):
+            if args[i] in ('-n', '--interval') and i + 1 < len(args):
+                i += 1
+                try:
+                    interval = float(args[i])
+                except ValueError:
+                    pass
+            elif args[i] == '-c' and i + 1 < len(args):
+                i += 1
+                try:
+                    count = int(args[i])
+                except ValueError:
+                    pass
+            else:
+                cmd_parts.append(args[i])
+            i += 1
+
+        if not cmd_parts:
+            print("Usage: watch [-n secs] [-c count] command")
+            return 1
+
+        cmd = ' '.join(cmd_parts)
+        runs = 0
+        try:
+            while count is None or runs < count:
+                print(f"\033[2J\033[H", end='')  # clear screen
+                print(f"Every {interval:.1f}s: {cmd}   (Ctrl+C to stop)\n")
+                shell.execute(cmd)
+                runs += 1
+                if count is None or runs < count:
+                    _time.sleep(interval)
+        except KeyboardInterrupt:
+            print()
+        return 0
+
+
+class FetchCommand(ShellCommand):
+    """Fetch content from a URL (like curl/wget, uses urllib)."""
+
+    def __init__(self):
+        super().__init__("fetch", "Fetch content from a URL")
+
+    def execute(self, args: List[str], shell) -> int:
+        try:
+            from urllib.request import urlopen, Request
+            from urllib.error import URLError, HTTPError
+        except ImportError:
+            print("fetch: urllib not available")
+            return 1
+
+        if not args:
+            print("Usage: fetch [-o outfile] [-H 'Header: val'] url")
+            return 1
+
+        url = None
+        outfile = None
+        headers: Dict[str, str] = {}
+        method = 'GET'
+        i = 0
+        while i < len(args):
+            if args[i] in ('-o', '--output') and i + 1 < len(args):
+                i += 1
+                outfile = args[i]
+            elif args[i] in ('-H', '--header') and i + 1 < len(args):
+                i += 1
+                if ':' in args[i]:
+                    k, v = args[i].split(':', 1)
+                    headers[k.strip()] = v.strip()
+            elif args[i] in ('-X', '--method') and i + 1 < len(args):
+                i += 1
+                method = args[i].upper()
+            else:
+                url = args[i]
+            i += 1
+
+        if not url:
+            print("fetch: no URL specified")
+            return 1
+
+        try:
+            req = Request(url, headers=headers, method=method)
+            with urlopen(req, timeout=10) as resp:
+                data = resp.read()
+                if outfile:
+                    shell.fs.write_file(outfile, data)
+                    size = len(data)
+                    print(f"fetch: saved {size} bytes to '{outfile}'")
+                else:
+                    try:
+                        sys.stdout.write(data.decode('utf-8', errors='replace'))
+                    except Exception:
+                        sys.stdout.buffer.write(data)
+        except HTTPError as e:
+            print(f"fetch: HTTP error {e.code}: {e.reason}")
+            return 1
+        except URLError as e:
+            print(f"fetch: connection error: {e.reason}")
+            return 1
+        except Exception as e:
+            print(f"fetch: error: {e}")
+            return 1
+        return 0
+
+
+class CalCommand(ShellCommand):
+    """Display a calendar."""
+
+    def __init__(self):
+        super().__init__("cal", "Display a calendar")
+
+    def execute(self, args: List[str], shell) -> int:
+        import calendar as _cal
+        import time as _time
+
+        now = _time.localtime()
+        year = now.tm_year
+        month = now.tm_mon
+        full_year = False
+
+        non_flag = [a for a in args if not a.startswith('-')]
+        if '-y' in args or '--year' in args:
+            full_year = True
+        if len(non_flag) == 2:
+            try:
+                month = int(non_flag[0])
+                year  = int(non_flag[1])
+            except ValueError:
+                pass
+        elif len(non_flag) == 1:
+            try:
+                year = int(non_flag[0])
+                full_year = True
+            except ValueError:
+                pass
+
+        if full_year:
+            print(f"                   {year}")
+            c = _cal.TextCalendar(_cal.SUNDAY)
+            for m in range(1, 13):
+                month_lines = c.formatmonth(year, m).splitlines()
+                for line in month_lines:
+                    print(line)
+        else:
+            print(_cal.month(year, month).rstrip())
+        return 0
+
+
+class BcCommand(ShellCommand):
+    """An arbitrary-precision calculator (safe expression evaluator)."""
+
+    def __init__(self):
+        super().__init__("bc", "An arbitrary precision calculator language")
+
+    def execute(self, args: List[str], shell) -> int:
+        import math as _math
+
+        # If args given treat as expression, else read from stdin
+        if args and not args[0].startswith('-'):
+            lines = [' '.join(args)]
+        else:
+            lines = sys.stdin.read().splitlines()
+
+        safe_globals = {
+            '__builtins__': {},
+            'sqrt': _math.sqrt, 'sin': _math.sin, 'cos': _math.cos,
+            'tan': _math.tan, 'log': _math.log, 'log10': _math.log10,
+            'log2': _math.log2, 'exp': _math.exp, 'pi': _math.pi,
+            'e': _math.e, 'abs': abs, 'round': round,
+            'floor': _math.floor, 'ceil': _math.ceil,
+            'pow': pow, 'factorial': _math.factorial,
+        }
+        local_vars: Dict[str, Any] = {}
+
+        rc = 0
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            # allow assignments like x=5
+            try:
+                result = eval(line, safe_globals, local_vars)
+                if result is not None:
+                    # format nicely: integers without decimal
+                    if isinstance(result, float) and result == int(result):
+                        print(int(result))
+                    else:
+                        print(result)
+                    local_vars['last'] = result
+            except SyntaxError:
+                try:
+                    exec(line, safe_globals, local_vars)
+                except Exception as e:
+                    print(f"bc: {e}", file=sys.stderr)
+                    rc = 1
+            except Exception as e:
+                print(f"bc: {e}", file=sys.stderr)
+                rc = 1
+
+        return rc
+
+
+class PrintfCommand(ShellCommand):
+    """Format and print data."""
+
+    def __init__(self):
+        super().__init__("printf", "Format and print data")
+
+    def execute(self, args: List[str], shell) -> int:
+        if not args:
+            print("Usage: printf FORMAT [ARGUMENT...]")
+            return 1
+
+        fmt = args[0]
+        fmt_args = args[1:]
+
+        # Handle escape sequences in format
+        fmt = fmt.replace('\\n', '\n').replace('\\t', '\t').replace('\\r', '\r') \
+                  .replace('\\\\', '\\').replace('\\0', '\0')
+
+        if not fmt_args:
+            sys.stdout.write(fmt)
+            return 0
+
+        # Try Python %-formatting
+        try:
+            # Count format specifiers
+            import re as _re
+            specs = _re.findall(r'%[-+0-9.]*[diouxXeEfFgGsqcb%]', fmt)
+            converted: List[Any] = []
+            for i, spec in enumerate(specs):
+                if spec == '%%':
+                    continue
+                val = fmt_args[i] if i < len(fmt_args) else ''
+                if spec[-1] in 'diouxX':
+                    try:
+                        converted.append(int(val, 0))
+                    except Exception:
+                        converted.append(0)
+                elif spec[-1] in 'eEfFgG':
+                    try:
+                        converted.append(float(val))
+                    except Exception:
+                        converted.append(0.0)
+                else:
+                    converted.append(val)
+            sys.stdout.write(fmt % tuple(converted))
+        except Exception:
+            sys.stdout.write(fmt)
+        return 0
+
+
+class Seq Command(ShellCommand):
+    pass  # placeholder - removed syntax error below
