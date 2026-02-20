@@ -73,6 +73,10 @@ class MemoryManager:
         self.used_memory = 0
         self.allocations: Dict[int, int] = {}  # pid -> bytes allocated
         self._lock = threading.Lock()
+        self.peak_used: int = 0
+        self.swap_total: int = 512 * 1024 * 1024
+        self.swap_used: int = 0
+        self.allocation_count: int = 0
     
     def allocate(self, pid: int, bytes_needed: int) -> bool:
         """Allocate memory to a process."""
