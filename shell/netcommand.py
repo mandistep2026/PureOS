@@ -494,16 +494,18 @@ class ResolvectlCommand(ShellCommand):
         search = rc.search or []
 
         shell.print("Global")
+        shell.print(f"  Hostname: {self.nm.get_hostname()}")
         if nameservers:
             shell.print(f"  DNS Servers: {' '.join(nameservers)}")
             shell.print(f"  Current DNS Server: {nameservers[0]}")
         else:
             shell.print("  DNS Servers: (none)")
 
+        domain_label = "DNS Domain" if len(search) == 1 else "DNS Domains"
         if search:
-            shell.print(f"  Search Domains: {' '.join(search)}")
+            shell.print(f"  {domain_label}: {' '.join(search)}")
         else:
-            shell.print("  Search Domains: (none)")
+            shell.print(f"  {domain_label}: (none)")
 
         for iface in self.nm.list_interfaces():
             shell.print("")
