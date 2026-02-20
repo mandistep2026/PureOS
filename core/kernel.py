@@ -50,6 +50,9 @@ class Process:
     kwargs: Dict[str, Any] = field(default_factory=dict)
     result: Any = None
     error: Optional[str] = None
+    # Signal handling
+    pending_signals: List[int] = field(default_factory=list)
+    signal_handlers: Dict[int, Optional[Callable]] = field(default_factory=dict)
 
 
 class MemoryManager:
