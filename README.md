@@ -454,6 +454,120 @@ When a background job completes, you'll see:
 - Service lifecycle management with threading
 - Resource enforcement and accounting
 
+## v2.1 - System Monitoring & Diagnostics
+
+PureOS v2.1 introduces a comprehensive suite of monitoring and diagnostic tools for system health tracking and performance analysis.
+
+### Enhanced Memory Command
+- **`free`** - Advanced memory statistics with swap, buffer/cache breakdown
+  - Flags: `-b` (bytes), `-k` (KB), `-m` (MB), `-g` (GB), `-h` (human-readable)
+  - Options: `-w` (wide format), `-t` (show totals), `-s <sec>` (continuous updates)
+  - Example: `free -h -t` shows human-readable memory with totals
+
+### I/O Monitoring
+- **`iostat`** - Report CPU and I/O statistics
+  - Shows per-device read/write throughput, TPS (transactions per second)
+  - Flags: `-c` (CPU only), `-d` (device only), `-x` (extended stats)
+  - Options: `-k` (kilobytes), `-m` (megabytes)
+  - Example: `iostat -x 2 5` shows extended stats every 2 seconds, 5 times
+
+### CPU Monitoring
+- **`mpstat`** - Report per-CPU statistics
+  - Shows %user, %system, %iowait, %idle, interrupt rates
+  - Flags: `-u` (utilization), `-I` (interrupts), `-A` (all stats)
+  - Options: `-P <cpu|ALL>` (select CPU)
+  - Example: `mpstat -P ALL 1` shows all CPUs, refreshing every second
+
+### System Diagnostics
+- **`sysdiag`** - Comprehensive system diagnostics tool
+  - Checks: memory pressure, process count, zombies, filesystem, services, swap, I/O
+  - Flags: `-q` (quiet), `-v` (verbose), `--fix` (attempt auto-fix)
+  - Options: `--category <name>` (filter by category)
+  - Returns exit code 1 if any CRITICAL issues found
+  - Example: `sysdiag -v --category SYSTEM`
+
+### System Health Dashboard
+- **`syshealth`** - Real-time system health overview
+  - Visual dashboard with progress bars for CPU, memory, swap, disk, network, services
+  - Flags: `--brief` (one-line summary), `--json` (JSON output), `--watch` (live updates)
+  - Section filters: `--cpu`, `--mem`, `--disk`, `--net`, `--svc`
+  - Example: `syshealth --watch` for live monitoring
+  - Example: `syshealth --brief` for quick status check
+
+### Performance Profiling
+- **`perf`** - Performance analysis and profiling tool
+  - **`perf stat [pid]`** - Collect syscall statistics
+    - Options: `-e <event>` (filter events), `-n <count>` (duration)
+  - **`perf top`** - Live syscall monitoring (like top for syscalls)
+  - **`perf record [pid]`** - Record performance data
+  - **`perf report`** - Display aggregated performance report
+  - Example: `perf stat -e read` shows read syscall stats
+  - Example: `perf top` for real-time syscall analysis
+
+### Interactive Process Monitor
+- **`htop`** - Interactive real-time process viewer
+  - Full-screen interface with CPU/memory progress bars
+  - Shows: PID, USER, priority, memory (VIRT/RES), CPU%, MEM%, TIME, COMMAND
+  - Options: `-d <delay>` (update interval in tenths), `-p <pid,pid>` (filter PIDs)
+  - Options: `-s <column>` (sort column), `-u <user>` (filter by user)
+  - Flags: `--no-color` (disable colors)
+  - Interactive keys: `q`/`F10` (quit), `k` (kill), `s` (cycle sort)
+  - Example: `htop -d 20 -s mem` updates every 2 seconds, sorted by memory
+
+### Core Monitoring Infrastructure
+The v2.1 release adds three new core modules:
+
+1. **`core/metrics.py`** - Metrics collection framework
+   - `MetricsCollector` - Gathers CPU, memory, I/O, network, disk, service metrics
+   - `HealthChecker` - Runs system health checks with OK/WARN/CRIT severity
+   - `PerfProfiler` - Syscall profiling and performance analysis
+
+2. **Kernel Instrumentation** - Enhanced `core/kernel.py`
+   - CPU tick tracking for accurate utilization percentages
+   - Syscall logging hooks for performance profiling
+   - Process resource accounting
+
+3. **Filesystem Instrumentation** - Enhanced `core/filesystem.py`
+   - I/O operation counters (reads, writes, bytes transferred)
+   - Real-time I/O rate calculation
+   - Throughput monitoring
+
+### Use Cases
+- **System Administration**: Monitor resource usage, diagnose bottlenecks
+- **Performance Tuning**: Profile applications, identify hot syscalls
+- **Health Monitoring**: Track system health, set up alerts
+- **Troubleshooting**: Diagnose memory leaks, CPU spikes, I/O issues
+- **Education**: Learn system monitoring concepts and tools
+
+### Examples
+
+Monitor system health continuously:
+```bash
+syshealth --watch
+```
+
+Quick system check:
+```bash
+sysdiag && echo "System OK" || echo "Issues detected"
+```
+
+Profile application performance:
+```bash
+perf stat myapp
+perf report
+```
+
+Monitor I/O during a backup:
+```bash
+iostat -x 1 &
+tar -czf backup.tar.gz /data
+```
+
+Track memory usage over time:
+```bash
+free -h -s 5
+```
+
 ## What's New in v1.9
 
 ### System Information Commands
