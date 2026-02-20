@@ -517,6 +517,14 @@ class PureOS:
             command, args = shell.parse_input("echo $?")
             assert command == "echo"
             assert args == ["1"]
+
+            # Quote-aware expansion behavior
+            command, args = shell.parse_input("echo '$PROJECT' \"$PROJECT\"")
+            assert command == "echo"
+            assert args == ["$PROJECT", "PureOS"]
+            command, args = shell.parse_input(r"echo \$PROJECT")
+            assert command == "echo"
+            assert args == ["$PROJECT"]
             print("  PASS")
             passed += 1
         except Exception as e:

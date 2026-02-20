@@ -32,7 +32,6 @@ class ShellCommand:
 class Shell:
     """Main shell interpreter."""
 
-    _VAR_PATTERN = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*|\?))')
     _VAR_NAME_PATTERN = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
     def __init__(self, kernel, filesystem, authenticator=None, user_manager=None):
@@ -240,14 +239,63 @@ class Shell:
         return expanded_parts[0], expanded_parts[1:]
 
     def _expand_environment_variables(self, line: str) -> str:
-        """Expand shell variables like $HOME, ${HOME}, and $?."""
-        def replacer(match: re.Match) -> str:
-            name = match.group(1) or match.group(2)
-            if name == '?':
-                return str(self.last_exit_code)
-            return self.environment.get(name, "")
+        """Expand shell variables like $HOME, ${HOME}, and $? with quote-awareness."""
+        result: List[str] = []
+        i = 0
+        in_single_quotes = False
+        in_double_quotes = False
 
-        return self._VAR_PATTERN.sub(replacer, line)
+        while i < len(line):
+            ch = line[i]
+
+            # Preserve escaped characters, including escaped '$'.
+            if ch == '\\' and i + 1 < len(line):
+                result.append(ch)
+                result.append(line[i + 1])
+                i += 2
+                continue
+
+            if ch == "'" and not in_double_quotes:
+                in_single_quotes = not in_single_quotes
+                result.append(ch)
+                i += 1
+                continue
+
+            if ch == '"' and not in_single_quotes:
+                in_double_quotes = not in_double_quotes
+                result.append(ch)
+                i += 1
+                continue
+
+            # Match shell behavior: no expansion inside single quotes.
+            if ch == '$' and not in_single_quotes:
+                if i + 1 < len(line) and line[i + 1] == '{':
+                    end_brace = line.find('}', i + 2)
+                    if end_brace != -1:
+                        name = line[i + 2:end_brace]
+                        if self._VAR_NAME_PATTERN.match(name):
+                            result.append(self.environment.get(name, ""))
+                            i = end_brace + 1
+                            continue
+                elif i + 1 < len(line):
+                    next_char = line[i + 1]
+                    if next_char == '?':
+                        result.append(str(self.last_exit_code))
+                        i += 2
+                        continue
+                    if next_char == '_' or next_char.isalpha():
+                        j = i + 2
+                        while j < len(line) and (line[j] == '_' or line[j].isalnum()):
+                            j += 1
+                        name = line[i + 1:j]
+                        result.append(self.environment.get(name, ""))
+                        i = j
+                        continue
+
+            result.append(ch)
+            i += 1
+
+        return ''.join(result)
 
     def _expand_wildcard(self, pattern: str) -> List[str]:
         """Expand wildcard pattern to matching files."""
