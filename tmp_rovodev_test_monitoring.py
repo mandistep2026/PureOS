@@ -71,9 +71,9 @@ def test_monitoring_commands():
     assert result == 0, "syshealth --brief failed"
     print("✓ syshealth --brief working")
     
-    # Test 7: perf stat
+    # Test 7: perf stat (without PID to get system-wide stats)
     print("\n[8/9] Testing 'perf stat'...")
-    result = shell.execute("perf stat 1")
+    result = shell.execute("perf stat")
     assert result == 0, "perf stat failed"
     print("✓ perf stat working")
     
