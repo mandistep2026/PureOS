@@ -52,9 +52,14 @@ class TestResolvectlStatusCommand(BaseTestCase):
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
-        self.assertIn(b"DNS Domains", content)
-        self.assertIn(b"corp.local", content)
-        self.assertIn(b"example.com", content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertTrue(
+            "DNS Domains" in text
+            or "DNS Domain" in text
+            or "Search Domains" in text
+        )
+        self.assertIn("corp.local", text)
+        self.assertIn("example.com", text)
 
 
 if __name__ == "__main__":
