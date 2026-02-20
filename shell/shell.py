@@ -1538,7 +1538,7 @@ class GrepCommand(ShellCommand):
             print(f"grep: {filename}: No such file or directory")
             return 1
 
-        lines = content.decode('utf-8', errors='replace').split('\n')
+        lines = content.decode('utf-8', errors='replace').splitlines()
         found = False
 
         for i, line in enumerate(lines, 1):
@@ -1555,32 +1555,65 @@ class HeadCommand(ShellCommand):
     def __init__(self):
         super().__init__("head", "Output the first part of files")
 
-    def execute(self, args: List[str], shell) -> int:
+    def _parse_args(self, args: List[str]) -> Tuple[Optional[int], List[str], Optional[str]]:
+        """Parse head-style options and return (line_count, files, error)."""
         lines_count = 10
-        filename = None
+        files: List[str] = []
 
-        # Parse arguments
-        for i, arg in enumerate(args):
-            if arg.startswith('-n'):
-                if len(arg) > 2:
-                    lines_count = int(arg[2:])
-                elif i + 1 < len(args):
-                    lines_count = int(args[i + 1])
-            elif not arg.startswith('-'):
-                filename = arg
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-n":
+                if i + 1 >= len(args):
+                    return None, [], "head: option requires an argument -- 'n'"
+                value = args[i + 1]
+                i += 2
+            elif arg.startswith("-n"):
+                value = arg[2:]
+                if not value:
+                    return None, [], "head: option requires an argument -- 'n'"
+                i += 1
+            elif arg.startswith('-'):
+                return None, [], f"head: invalid option -- '{arg}'"
+            else:
+                files.append(arg)
+                i += 1
+                continue
 
-        if not filename:
+            try:
+                lines_count = int(value)
+            except ValueError:
+                return None, [], f"head: invalid number of lines: '{value}'"
+
+            if lines_count < 0:
+                return None, [], f"head: invalid number of lines: '{value}'"
+
+        return lines_count, files, None
+
+    def execute(self, args: List[str], shell) -> int:
+        lines_count, files, parse_error = self._parse_args(args)
+        if parse_error:
+            print(parse_error)
+            return 1
+
+        if not files:
             print("head: missing file operand")
             return 1
 
-        content = shell.fs.read_file(filename)
-        if content is None:
-            print(f"head: cannot open '{filename}' for reading: No such file or directory")
-            return 1
+        for index, filename in enumerate(files):
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"head: cannot open '{filename}' for reading: No such file or directory")
+                return 1
 
-        lines = content.decode('utf-8', errors='replace').split('\n')
-        for line in lines[:lines_count]:
-            print(line)
+            if len(files) > 1:
+                if index > 0:
+                    print()
+                print(f"==> {filename} <==")
+
+            lines = content.decode('utf-8', errors='replace').splitlines()
+            for line in lines[:lines_count]:
+                print(line)
 
         return 0
 
@@ -1591,33 +1624,66 @@ class TailCommand(ShellCommand):
     def __init__(self):
         super().__init__("tail", "Output the last part of files")
 
-    def execute(self, args: List[str], shell) -> int:
+    def _parse_args(self, args: List[str]) -> Tuple[Optional[int], List[str], Optional[str]]:
+        """Parse tail-style options and return (line_count, files, error)."""
         lines_count = 10
-        filename = None
+        files: List[str] = []
 
-        # Parse arguments
-        for i, arg in enumerate(args):
-            if arg.startswith('-n'):
-                if len(arg) > 2:
-                    lines_count = int(arg[2:])
-                elif i + 1 < len(args):
-                    lines_count = int(args[i + 1])
-            elif not arg.startswith('-'):
-                filename = arg
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "-n":
+                if i + 1 >= len(args):
+                    return None, [], "tail: option requires an argument -- 'n'"
+                value = args[i + 1]
+                i += 2
+            elif arg.startswith("-n"):
+                value = arg[2:]
+                if not value:
+                    return None, [], "tail: option requires an argument -- 'n'"
+                i += 1
+            elif arg.startswith('-'):
+                return None, [], f"tail: invalid option -- '{arg}'"
+            else:
+                files.append(arg)
+                i += 1
+                continue
 
-        if not filename:
+            try:
+                lines_count = int(value)
+            except ValueError:
+                return None, [], f"tail: invalid number of lines: '{value}'"
+
+            if lines_count < 0:
+                return None, [], f"tail: invalid number of lines: '{value}'"
+
+        return lines_count, files, None
+
+    def execute(self, args: List[str], shell) -> int:
+        lines_count, files, parse_error = self._parse_args(args)
+        if parse_error:
+            print(parse_error)
+            return 1
+
+        if not files:
             print("tail: missing file operand")
             return 1
 
-        content = shell.fs.read_file(filename)
-        if content is None:
-            print(f"tail: cannot open '{filename}' for reading: No such file or directory")
-            return 1
+        for index, filename in enumerate(files):
+            content = shell.fs.read_file(filename)
+            if content is None:
+                print(f"tail: cannot open '{filename}' for reading: No such file or directory")
+                return 1
 
-        lines = content.decode('utf-8', errors='replace').split('\n')
-        start = max(0, len(lines) - lines_count)
-        for line in lines[start:]:
-            print(line)
+            if len(files) > 1:
+                if index > 0:
+                    print()
+                print(f"==> {filename} <==")
+
+            lines = content.decode('utf-8', errors='replace').splitlines()
+            start = max(0, len(lines) - lines_count)
+            for line in lines[start:]:
+                print(line)
 
         return 0
 
