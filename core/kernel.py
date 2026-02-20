@@ -409,4 +409,44 @@ class Kernel:
             "uptime_seconds": self.get_uptime(),
             "running_processes": len([p for p in self.processes.values() 
                                      if p.state == ProcessState.RUNNING]),
+            "context_switches": self._context_switches,
+            "interrupts": self._interrupts,
+            "io_stats": self._io_stats.copy(),
+            "cpu_ticks": self._cpu_ticks.copy(),
         }
+
+    def record_io(self, pid: int, op: str, bytes_count: int):
+        """Record I/O operation for process and system stats."""
+        if op in ['read', 'reads']:
+            self._io_stats['reads'] += 1
+            self._io_stats['read_bytes'] += bytes_count
+            if pid in self.processes:
+                self.processes[pid].read_bytes += bytes_count
+        elif op in ['write', 'writes']:
+            self._io_stats['writes'] += 1
+            self._io_stats['write_bytes'] += bytes_count
+            if pid in self.processes:
+                self.processes[pid].write_bytes += bytes_count
+
+    def record_syscall(self, pid: int, name: str, duration: float = 0.001):
+        """Record a syscall for performance profiling."""
+        if pid in self.processes:
+            proc = self.processes[pid]
+            proc.syscall_count += 1
+            if len(proc.syscall_log) < 200:
+                proc.syscall_log.append((name, duration))
+
+    def get_cpu_stats(self) -> dict:
+        """Get CPU statistics snapshot."""
+        return {
+            'user': self._cpu_ticks['user'],
+            'system': self._cpu_ticks['system'],
+            'idle': self._cpu_ticks['idle'],
+            'iowait': self._cpu_ticks['iowait'],
+            'context_switches': self._context_switches,
+            'interrupts': self._interrupts
+        }
+
+    def get_io_stats(self) -> dict:
+        """Get I/O statistics snapshot."""
+        return self._io_stats.copy()
