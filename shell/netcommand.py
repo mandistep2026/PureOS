@@ -460,6 +460,61 @@ class ArpCommand(ShellCommand):
         return 0
 
 
+class ResolvectlCommand(ShellCommand):
+    """Show DNS resolver status (resolvectl status)."""
+
+    USAGE = (
+        "Usage: resolvectl [status]\n"
+        "  (no args)   Show DNS resolver status\n"
+        "  status      Same as no args\n"
+    )
+
+    def __init__(self, network_manager=None):
+        super().__init__("resolvectl", "Show DNS resolver status")
+        self.nm = network_manager
+
+    def execute(self, args: List[str], shell) -> int:
+        if not self.nm:
+            self.nm = shell.network_manager
+
+        if not args or args[0] == "status":
+            return self._show_status(shell)
+
+        if args[0] in ("-h", "--help"):
+            shell.print(self.USAGE)
+            return 0
+
+        shell.print(f"resolvectl: unknown option '{args[0]}'")
+        shell.print(self.USAGE)
+        return 1
+
+    def _show_status(self, shell) -> int:
+        rc = self.nm.get_resolver_config()
+        nameservers = rc.nameservers or []
+        search = rc.search or []
+
+        shell.print("Global")
+        if nameservers:
+            shell.print(f"  DNS Servers: {' '.join(nameservers)}")
+            shell.print(f"  Current DNS Server: {nameservers[0]}")
+        else:
+            shell.print("  DNS Servers: (none)")
+
+        if search:
+            shell.print(f"  Search Domains: {' '.join(search)}")
+        else:
+            shell.print("  Search Domains: (none)")
+
+        for iface in self.nm.list_interfaces():
+            shell.print("")
+            shell.print(f"Link {iface.name} ({iface.ip_address})")
+            if nameservers:
+                shell.print(f"  DNS Servers: {' '.join(nameservers)}")
+            if search:
+                shell.print(f"  Search Domains: {' '.join(search)}")
+        return 0
+
+
 class ResolvconfCommand(ShellCommand):
     """View or set DNS resolver configuration (/etc/resolv.conf)."""
 
