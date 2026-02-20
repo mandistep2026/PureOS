@@ -548,6 +548,96 @@ nslookup google.com
 - **tcpdump**: Packet analyzer
 - **mtr**: Combined traceroute + ping
 
+## What's New in v1.7
+
+### Pipe Support
+Connect commands with Unix-style pipes:
+
+```bash
+cat file.txt | grep error | sort | uniq -c
+echo "hello world" | wc -w
+ls | grep .txt | sort -r
+cat /etc/os-release | grep NAME
+```
+
+Multi-stage pipes are fully supported. All text-processing commands (`grep`, `sort`, `uniq`, `cut`, `wc`, `head`, `tail`) now read from stdin when no file is given, making them proper pipe-friendly filters.
+
+### Stdin Redirection
+Redirect file content to a command's standard input:
+
+```bash
+sort < unsorted.txt
+grep error < logfile.txt > errors.txt
+cat < input.txt > output.txt
+wc -l < myfile.txt
+```
+
+### New Commands
+
+#### ln — Create links
+```bash
+ln -s /etc/hostname /tmp/host_link    # symbolic link
+ln /tmp/orig.txt /tmp/hard.txt         # hard link
+```
+
+#### diff — Compare files
+```bash
+diff file1.txt file2.txt               # normal diff
+diff -u file1.txt file2.txt            # unified diff
+diff -u file1.txt file2.txt > patch.diff
+```
+
+#### tee — Pipe and save simultaneously
+```bash
+cat log.txt | tee backup.txt           # write to file AND stdout
+echo data | tee -a log.txt             # append mode
+echo result | tee out.txt | grep ok   # chain in pipeline
+```
+
+#### tar — Virtual archives
+```bash
+tar -cf archive.tar file1.txt dir/    # create archive
+tar -tf archive.tar                   # list contents
+tar -xf archive.tar -C /tmp/dest/     # extract to directory
+tar -cf backup.tar /home/alice        # archive a directory
+```
+
+#### cron — Job scheduler
+```bash
+# List scheduled jobs
+cron list
+
+# Schedule a job (runs every 60 seconds)
+cron add backup "tar -cf /tmp/backup.tar /home" 60
+
+# Schedule a one-shot job (5-second interval, 1 run)
+cron add ping-check "ping -c 1 8.8.8.8" 5
+
+# Pause and resume
+cron pause 1
+cron resume 1
+
+# Remove a job
+cron remove 1
+```
+
+#### top — Process monitor
+```bash
+top                        # snapshot of all processes
+top > /tmp/procs.txt      # save process list
+```
+
+### System Files
+Standard Unix-like system files are now populated on boot:
+- `/etc/hostname` — system hostname
+- `/etc/motd` — message of the day (shown on login)
+- `/etc/os-release` — OS identification
+- `/etc/shells` — list of available shells
+- `/proc/version` — kernel version string
+- `/proc/net/dev` — network interface stats
+- `/var/log/` — log directory
+- `/usr/bin/`, `/usr/local/` — standard directories
+
 ---
 
 **PureOS** - Pure Python, Pure Power!
