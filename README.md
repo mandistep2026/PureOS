@@ -407,6 +407,53 @@ When a background job completes, you'll see:
 [1]+  Done                    sleep 10
 ```
 
+## What's New in v2.0
+
+### 🚀 Major System Enhancements
+
+#### System Logging & Monitoring
+- **`dmesg`** — Display kernel ring buffer messages
+- **`logger`** — Add entries to system log with priority and facility
+- **`journalctl`** — Query the system journal with filtering (`-n`, `-u`, `-p`, `-f`)
+- **SystemLogger** — Full syslog-compatible logging infrastructure
+- Multiple log levels (EMERG, ALERT, CRIT, ERR, WARNING, NOTICE, INFO, DEBUG)
+- Log facilities (KERN, USER, MAIL, DAEMON, AUTH, CRON, etc.)
+
+#### Inter-Process Communication (IPC)
+- **`ipcs`** — Show IPC facility status (pipes, message queues, shared memory, semaphores)
+- **Pipes** — Unidirectional byte stream communication with 64KB buffers
+- **Message Queues** — POSIX-style message queues with priorities
+- **Shared Memory** — Process-shared memory segments with attach/detach
+- **Semaphores** — Counting semaphores for synchronization
+- Full IPC manager with create, get, remove operations
+
+#### Init System & Service Management
+- **`systemctl`** — Control system services (start, stop, restart, status, enable, disable)
+- **Service Manager** — systemd-style service management
+- Service states: inactive, activating, active, deactivating, failed, reloading
+- Service types: simple, forking, oneshot, notify, idle
+- Service dependencies and ordering (After, Before, Wants, Requires)
+- System targets: rescue.target, multi-user.target, graphical.target
+- Auto-restart policies: no, always, on-success, on-failure
+- Default services: syslog.service, network.service, cron.service
+
+#### Resource Limits & Control Groups
+- **`ulimit`** — Get and set user limits (similar to bash ulimit)
+- **`cgctl`** — Control group management (list, create, delete, move, show)
+- **Resource Limits** — Per-process limits for CPU, memory, files, stack, etc.
+- Soft and hard limits with enforcement
+- **Control Groups (cgroups)** — Resource allocation and control
+- CPU shares, CPU quotas, memory limits, I/O weights
+- Process limit per cgroup, hierarchical structure
+- Default cgroups: /, /system, /user
+
+### Technical Improvements
+- Integrated all subsystems into kernel initialization
+- Proper logging throughout system operations
+- Thread-safe IPC operations with locks
+- Service lifecycle management with threading
+- Resource enforcement and accounting
+
 ## What's New in v1.9
 
 ### System Information Commands
