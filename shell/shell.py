@@ -744,6 +744,11 @@ class Shell:
             if err_buf:
                 sys.stderr = err_buf
 
+            # Support 2>&1 by sharing stdout buffer
+            if '2>&1' in seg_cmd and out_buf is not None:
+                err_buf = out_buf
+                sys.stderr = out_buf
+
             try:
                 if command_name in self.commands:
                     try:
