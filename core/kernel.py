@@ -3,12 +3,13 @@ PureOS Kernel
 Core operating system functionality using only Python standard library.
 """
 
+import random
 import threading
 import queue
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from enum import Enum
 
 
