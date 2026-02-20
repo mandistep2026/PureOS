@@ -21,23 +21,54 @@ class DmesgCommand(ShellCommand):
         
         clear = '-c' in args or '--clear' in args
         level = None
+        lines = None
         
         # Parse log level filter
-        for arg in args:
-            if arg.startswith('-l') or arg.startswith('--level='):
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in ('-l', '--level'):
+                if i + 1 < len(args):
+                    i += 1
+                    try:
+                        from core.logging import LogLevel
+                        level = LogLevel[args[i].upper()]
+                    except:
+                        pass
+            elif arg.startswith('--level='):
                 try:
-                    if '=' in arg:
-                        level_str = arg.split('=')[1]
-                    else:
-                        level_str = arg[2:]
                     from core.logging import LogLevel
-                    level = LogLevel[level_str.upper()]
+                    level = LogLevel[arg.split('=', 1)[1].upper()]
                 except:
                     pass
-        
-        kernel_log = shell.kernel.logger.get_kernel_log()
-        for line in kernel_log:
-            print(line)
+            elif arg.startswith('-l') and len(arg) > 2:
+                try:
+                    from core.logging import LogLevel
+                    level = LogLevel[arg[2:].upper()]
+                except:
+                    pass
+            elif arg in ('-n', '--lines'):
+                if i + 1 < len(args):
+                    i += 1
+                    try:
+                        lines = int(args[i])
+                    except:
+                        pass
+            elif arg.startswith('--lines='):
+                try:
+                    lines = int(arg.split('=', 1)[1])
+                except:
+                    pass
+            i += 1
+
+        from core.logging import LogFacility
+        entries = shell.kernel.logger.query(
+            level=level,
+            facility=LogFacility.KERN,
+            limit=lines,
+        )
+        for entry in entries:
+            print(entry.to_readable_format())
         
         if clear:
             shell.kernel.logger.kernel_buffer.clear()
