@@ -301,18 +301,105 @@ class Shell:
 
             # Match shell behavior: no expansion inside single quotes.
             if ch == '$' and not in_single_quotes:
+                # Arithmetic expansion: $(( expr ))
+                if i + 2 < len(line) and line[i+1:i+3] == '((':
+                    end = line.find('))', i + 3)
+                    if end != -1:
+                        expr_str = line[i+3:end].strip()
+                        # Expand variables inside the expression first
+                        for var_name, var_val in self.environment.items():
+                            try:
+                                expr_str = expr_str.replace(f'${var_name}', var_val)
+                                expr_str = expr_str.replace(var_name, var_val if var_val.lstrip('-').isdigit() else var_val)
+                            except Exception:
+                                pass
+                        try:
+                            arith_result = eval(expr_str, {"__builtins__": {}}, {})
+                            result.append(str(int(arith_result)))
+                        except Exception:
+                            result.append('0')
+                        i = end + 2
+                        continue
+                # Command substitution: $( cmd )
+                if i + 1 < len(line) and line[i+1] == '(':
+                    # Find matching closing paren
+                    depth = 0
+                    j = i + 1
+                    while j < len(line):
+                        if line[j] == '(':
+                            depth += 1
+                        elif line[j] == ')':
+                            depth -= 1
+                            if depth == 0:
+                                break
+                        j += 1
+                    if j < len(line):
+                        sub_cmd = line[i+2:j].strip()
+                        old_stdout = sys.stdout
+                        captured_io = StringIO()
+                        sys.stdout = captured_io
+                        try:
+                            self.execute(sub_cmd, save_to_history=False)
+                        except Exception:
+                            pass
+                        finally:
+                            sys.stdout = old_stdout
+                        sub_output = captured_io.getvalue().rstrip('\n')
+                        result.append(sub_output)
+                        i = j + 1
+                        continue
                 if i + 1 < len(line) and line[i + 1] == '{':
                     end_brace = line.find('}', i + 2)
                     if end_brace != -1:
                         name = line[i + 2:end_brace]
-                        if self._VAR_NAME_PATTERN.match(name):
+                        # Handle ${var:-default}, ${var:=default}, ${#var}
+                        if name.startswith('#'):
+                            var_name = name[1:]
+                            val = self.environment.get(var_name, '')
+                            result.append(str(len(val)))
+                        elif ':-' in name:
+                            var_name, default = name.split(':-', 1)
+                            result.append(self.environment.get(var_name, '') or default)
+                        elif ':=' in name:
+                            var_name, default = name.split(':=', 1)
+                            val = self.environment.get(var_name, '')
+                            if not val:
+                                self.environment[var_name] = default
+                                val = default
+                            result.append(val)
+                        elif ':?' in name:
+                            var_name, msg = name.split(':?', 1)
+                            val = self.environment.get(var_name, '')
+                            if not val:
+                                print(f"bash: {var_name}: {msg}", file=sys.stderr)
+                            else:
+                                result.append(val)
+                        elif ':+' in name:
+                            var_name, alt = name.split(':+', 1)
+                            val = self.environment.get(var_name, '')
+                            result.append(alt if val else '')
+                        elif self._VAR_NAME_PATTERN.match(name):
                             result.append(self.environment.get(name, ""))
-                            i = end_brace + 1
-                            continue
+                        i = end_brace + 1
+                        continue
                 elif i + 1 < len(line):
                     next_char = line[i + 1]
                     if next_char == '?':
                         result.append(str(self.last_exit_code))
+                        i += 2
+                        continue
+                    if next_char == '#':
+                        # $# = number of positional params (0 in interactive)
+                        result.append(self.environment.get('#', '0'))
+                        i += 2
+                        continue
+                    if next_char == '@' or next_char == '*':
+                        result.append(self.environment.get('@', ''))
+                        i += 2
+                        continue
+                    if next_char == '$':
+                        import os as _os
+                        result.append(str(_os.getpid()))
                         i += 2
                         continue
                     if next_char == '_' or next_char.isalpha():
