@@ -420,9 +420,21 @@ class SysdiagCommand(ShellCommand):
         warn_count = 0
         ok_count   = 0
 
+        # Convert tuple results to dict format
+        # results is List[Tuple[check_name, status, message]]
+        dict_results = []
+        for check_name, status, message in results:
+            dict_results.append({
+                'category': 'SYSTEM',
+                'name': check_name,
+                'status': status,
+                'message': message,
+                'detail': ''
+            })
+
         # Group results by category
         categories: dict = {}
-        for result in results:
+        for result in dict_results:
             cat = result.get('category', 'GENERAL').upper()
             categories.setdefault(cat, []).append(result)
 
