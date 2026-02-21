@@ -4,7 +4,7 @@ PureOS Network Shell Commands
 
 import time
 import random
-from typing import List
+from typing import List, Optional
 from shell.shell import ShellCommand
 
 
@@ -464,9 +464,10 @@ class ResolvectlCommand(ShellCommand):
     """Show DNS resolver status (resolvectl status)."""
 
     USAGE = (
-        "Usage: resolvectl [status]\n"
-        "  (no args)   Show DNS resolver status\n"
-        "  status      Same as no args\n"
+        "Usage: resolvectl [status [INTERFACE]]\n"
+        "  (no args)            Show DNS resolver status\n"
+        "  status               Same as no args\n"
+        "  status INTERFACE     Show DNS status for one link\n"
     )
 
     def __init__(self, network_manager=None):
@@ -477,8 +478,16 @@ class ResolvectlCommand(ShellCommand):
         if not self.nm:
             self.nm = shell.network_manager
 
-        if not args or args[0] == "status":
+        if not args:
             return self._show_status(shell)
+
+        if args[0] == "status":
+            if len(args) > 2:
+                shell.print("resolvectl: status takes at most one interface argument")
+                shell.print(self.USAGE)
+                return 1
+            interface_name = args[1] if len(args) == 2 else None
+            return self._show_status(shell, interface_name=interface_name)
 
         if args[0] in ("-h", "--help"):
             shell.print(self.USAGE)
@@ -488,7 +497,7 @@ class ResolvectlCommand(ShellCommand):
         shell.print(self.USAGE)
         return 1
 
-    def _show_status(self, shell) -> int:
+    def _show_status(self, shell, interface_name: Optional[str] = None) -> int:
         rc = self.nm.get_resolver_config()
         nameservers = rc.nameservers or []
         search = rc.search or []
@@ -507,10 +516,18 @@ class ResolvectlCommand(ShellCommand):
         else:
             shell.print(f"  {domain_label}: (none)")
 
-        for iface in self.nm.list_interfaces():
+        interfaces = self.nm.list_interfaces()
+        if interface_name:
+            target = self.nm.get_interface(interface_name)
+            if not target:
+                shell.print(f"resolvectl: unknown interface '{interface_name}'")
+                return 1
+            interfaces = [target]
+
+        for iface in interfaces:
             shell.print("")
             shell.print(f"Link {iface.name} ({iface.ip_address})")
-            shell.print(f"  Interface State: {iface.state.value}")
+            shell.print(f"  Interface State: {iface.state.value.upper()}")
             shell.print(f"  Interface CIDR: {iface.get_cidr()}")
             if nameservers:
                 shell.print(f"  DNS Servers: {' '.join(nameservers)}")

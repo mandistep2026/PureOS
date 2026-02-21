@@ -74,13 +74,25 @@ class TestResolvectlStatusCommand(BaseTestCase):
         self.assertIn("corp.local", text)
         self.assertIn("example.com", text)
 
+
+    def test_resolvectl_status_single_interface_filters_other_links(self):
+        self.assertShellSuccess(self.shell, "resolvectl status lo > /tmp/resolvectl_lo.txt")
+        content = self.fs.read_file("/tmp/resolvectl_lo.txt")
+        self.assertIsNotNone(content)
+        text = content.decode("utf-8", errors="replace")
+        self.assertIn("Link lo (127.0.0.1)", text)
+        self.assertNotIn("Link eth0", text)
+
+    def test_resolvectl_status_unknown_interface_fails(self):
+        self.assertShellFails(self.shell, "resolvectl status fake0")
+
     def test_resolvectl_status_reports_link_state_and_cidr(self):
         self.assertShellSuccess(self.shell, "resolvectl status > /tmp/resolvectl_status.txt")
         content = self.fs.read_file("/tmp/resolvectl_status.txt")
         self.assertIsNotNone(content)
         text = content.decode("utf-8", errors="replace")
-        state_pattern = re.compile(r"Interface State:\\s*(UP|DOWN)", re.IGNORECASE)
-        cidr_pattern = re.compile(r"Interface CIDR:\\s*\\d{1,3}(?:\\.\\d{1,3}){3}/\\d{1,2}")
+        state_pattern = re.compile(r"Interface State:\s*(UP|DOWN)", re.IGNORECASE)
+        cidr_pattern = re.compile(r"Interface CIDR:\s*\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}")
         self.assertRegex(text, state_pattern)
         self.assertRegex(text, cidr_pattern)
 
