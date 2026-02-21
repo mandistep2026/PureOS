@@ -1654,7 +1654,7 @@ All 70+ built-in commands implement `execute(args, shell) -> int`. They are orga
 | `hostname` | `HostnameCommand` | Show or set the system hostname. Flags: `-i`, `-s`. |
 | `dig` | `DigCommand` | DNS lookup utility. |
 | `nslookup` | `NslookupCommand` | Query DNS for a domain name. |
-| `resolvectl` | `ResolvectlCommand` | Show DNS resolver status (includes interface state and CIDR fields). |
+| `resolvectl` | `ResolvectlCommand` | Show DNS resolver status (includes interface state and CIDR fields); accepts `status [INTERFACE]`. |
 
 ### Package Management Command
 

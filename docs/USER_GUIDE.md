@@ -699,6 +699,7 @@ traceroute 8.8.8.8                # Trace route to host
 dig google.com                    # DNS lookup
 nslookup cloudflare.com           # DNS name resolution
 resolvectl                         # Show DNS resolver status (includes interface state and CIDR fields)
+resolvectl status lo               # Show DNS resolver status for a single interface
 ```
 
 #### Fetching URLs
